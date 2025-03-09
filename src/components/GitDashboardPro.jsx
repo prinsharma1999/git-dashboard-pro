@@ -11,6 +11,8 @@ import {
   Monitor, Smartphone, Tablet, Layout, MessageCircle, Flag, CornerDownRight, Calendar
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { themes } from '../data/themes';
+import { tagCategories } from '../data/tagCategories';
 
 // Custom hooks
 const useLocalStorage = (key, initialValue) => {

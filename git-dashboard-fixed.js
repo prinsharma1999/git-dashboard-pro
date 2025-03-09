@@ -19,7 +19,540 @@ const useLocalStorage = (key, initialValue) => {
     try {
       const item = window.localStorage.getItem(key);
       return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
+    }
+  
+  // Main dashboard return
+  return (
+    <div 
+      className="flex flex-col h-screen"
+      style={{ backgroundColor: theme.background.default }}
+    >
+      {/* Header */}
+      <header 
+        className="flex justify-between items-center p-4 border-b"
+        style={{ 
+          backgroundColor: theme.background.paper,
+          borderColor: theme.border.main
+        }}
+      >
+        <div className="flex items-center">
+          <button
+            className="p-2 rounded-lg mr-2 md:hidden"
+            style={{ color: theme.text.primary }}
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            {sidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+          </button>
+          <div className="flex items-center">
+            <GitBranch size={24} className="mr-2" style={{ color: theme.primary.main }} />
+            <h1 className="text-xl font-bold" style={{ color: theme.text.primary }}>
+              Git Dashboard Pro
+            </h1>
+          </div>
+        </div>
+        
+        <div className="flex-1 mx-4 max-w-xl">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search git commands... (Ctrl+K)"
+              className="w-full py-2 px-4 pl-10 rounded-lg"
+              style={{ 
+                backgroundColor: theme.background.default,
+                color: theme.text.primary,
+                borderColor: theme.border.main
+              }}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              ref={searchRef}
+            />
+            <Search 
+              className="absolute left-3 top-2.5" 
+              size={18} 
+              style={{ color: theme.text.hint }}
+            />
+            {searchTerm && (
+              <button
+                className="absolute right-3 top-2.5"
+                style={{ color: theme.text.hint }}
+                onClick={() => setSearchTerm('')}
+              >
+                <X size={18} />
+              </button>
+            )}
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <button
+            className="p-2 rounded-lg"
+            style={{ color: theme.text.primary }}
+            onClick={() => setShowTerminal(!showTerminal)}
+            title="Terminal (Ctrl+/)"
+          >
+            <Terminal size={20} />
+          </button>
+          <button
+            className="p-2 rounded-lg hidden md:block"
+            style={{ color: theme.text.primary }}
+            onClick={() => setIsAddingCommand(true)}
+            title="Add custom command"
+          >
+            <Plus size={20} />
+          </button>
+          <div className="relative">
+            <button
+              className="p-2 rounded-lg"
+              style={{ color: theme.text.primary }}
+              onClick={() => setShowSettings(!showSettings)}
+              title="Settings"
+            >
+              <Settings size={20} />
+            </button>
+            {showSettings && (
+              <div 
+                className="absolute right-0 mt-2 w-64 rounded-lg shadow-lg z-50 overflow-hidden"
+                style={{ 
+                  backgroundColor: theme.background.paper,
+                  border: `1px solid ${theme.border.main}`
+                }}
+              >
+                <div 
+                  className="px-4 py-3 border-b"
+                  style={{ borderColor: theme.border.main }}
+                >
+                  <h3 className="font-semibold" style={{ color: theme.text.primary }}>
+                    Settings
+                  </h3>
+                </div>
+                <div className="p-4">
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium mb-2" style={{ color: theme.text.primary }}>
+                      Theme
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.keys(themes).map(key => (
+                        <button
+                          key={key}
+                          className="px-3 py-2 rounded-lg text-sm transition-colors"
+                          style={{ 
+                            backgroundColor: themeId === key ? themes[key].primary.main : 'transparent',
+                            color: themeId === key ? themes[key].primary.contrast : theme.text.primary,
+                            border: `1px solid ${themeId === key ? themes[key].primary.main : theme.border.main}`
+                          }}
+                          onClick={() => setThemeId(key)}
+                        >
+                          {themes[key].name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium mb-2" style={{ color: theme.text.primary }}>
+                      Display Options
+                    </h4>
+                    <div className="space-y-2">
+                      <label className="flex items-center">
+                        <input 
+                          type="checkbox" 
+                          checked={userPreferences.showDescriptions} 
+                          onChange={() => setUserPreferences({
+                            ...userPreferences,
+                            showDescriptions: !userPreferences.showDescriptions
+                          })}
+                          className="mr-2"
+                        />
+                        <span style={{ color: theme.text.secondary }}>Show descriptions</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input 
+                          type="checkbox" 
+                          checked={userPreferences.showTags} 
+                          onChange={() => setUserPreferences({
+                            ...userPreferences,
+                            showTags: !userPreferences.showTags
+                          })}
+                          className="mr-2"
+                        />
+                        <span style={{ color: theme.text.secondary }}>Show tags</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input 
+                          type="checkbox" 
+                          checked={userPreferences.showExamples} 
+                          onChange={() => setUserPreferences({
+                            ...userPreferences,
+                            showExamples: !userPreferences.showExamples
+                          })}
+                          className="mr-2"
+                        />
+                        <span style={{ color: theme.text.secondary }}>Show examples</span>
+                      </label>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-sm font-medium mb-2" style={{ color: theme.text.primary }}>
+                      Data Management
+                    </h4>
+                    <div className="space-y-2">
+                      <button
+                        className="w-full px-3 py-2 rounded-lg text-sm text-left transition-colors"
+                        style={{ 
+                          backgroundColor: 'transparent',
+                          color: theme.text.primary,
+                          border: `1px solid ${theme.border.main}`
+                        }}
+                        onClick={exportUserData}
+                      >
+                        <Download size={14} className="inline-block mr-2" />
+                        Export Data
+                      </button>
+                      <button
+                        className="w-full px-3 py-2 rounded-lg text-sm text-left transition-colors"
+                        style={{ 
+                          backgroundColor: 'transparent',
+                          color: theme.text.primary,
+                          border: `1px solid ${theme.border.main}`
+                        }}
+                        onClick={() => setActiveModal('import')}
+                      >
+                        <Upload size={14} className="inline-block mr-2" />
+                        Import Data
+                      </button>
+                      <button
+                        className="w-full px-3 py-2 rounded-lg text-sm text-left transition-colors"
+                        style={{ 
+                          backgroundColor: 'transparent',
+                          color: theme.status.error,
+                          border: `1px solid ${theme.status.error}`
+                        }}
+                        onClick={resetDashboard}
+                      >
+                        <RefreshCw size={14} className="inline-block mr-2" />
+                        Reset Dashboard
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+      
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar */}
+        <aside 
+          className={`${sidebarOpen ? 'w-64' : 'w-0'} md:w-64 flex-shrink-0 transition-all duration-300 overflow-hidden border-r`}
+          style={{ 
+            borderColor: theme.border.main
+          }}
+        >
+          <div className="p-2 overflow-y-auto h-full" style={{ backgroundColor: theme.background.elevated }}>
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold mb-2 px-2" style={{ color: theme.text.primary }}>
+                Categories
+              </h2>
+              <div className="space-y-1">
+                <button
+                  className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                    activeCategory === 'all' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                  }`}
+                  style={{ 
+                    backgroundColor: activeCategory === 'all' ? theme.primary.main : 'transparent',
+                    color: activeCategory === 'all' ? theme.primary.main : theme.text.primary,
+                    borderLeft: activeCategory === 'all' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                  }}
+                  onClick={() => setActiveCategory('all')}
+                >
+                  <Command className="mr-3" />
+                  <span>All Commands</span>
+                </button>
+                <button
+                  className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                    activeCategory === 'favorites' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                  }`}
+                  style={{ 
+                    backgroundColor: activeCategory === 'favorites' ? theme.primary.main : 'transparent',
+                    color: activeCategory === 'favorites' ? theme.primary.main : theme.text.primary,
+                    borderLeft: activeCategory === 'favorites' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                  }}
+                  onClick={() => setActiveCategory('favorites')}
+                >
+                  <Star className="mr-3" />
+                  <span>Favorites</span>
+                  {favorites.length > 0 && (
+                    <span className="ml-auto px-2 py-0.5 rounded-full text-xs" style={{ backgroundColor: theme.primary.main, color: theme.primary.contrast }}>
+                      {favorites.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                    activeCategory === 'recent' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                  }`}
+                  style={{ 
+                    backgroundColor: activeCategory === 'recent' ? theme.primary.main : 'transparent',
+                    color: activeCategory === 'recent' ? theme.primary.main : theme.text.primary,
+                    borderLeft: activeCategory === 'recent' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                  }}
+                  onClick={() => setActiveCategory('recent')}
+                >
+                  <Clock className="mr-3" />
+                  <span>Recently Used</span>
+                  {recentlyUsed.length > 0 && (
+                    <span className="ml-auto px-2 py-0.5 rounded-full text-xs" style={{ backgroundColor: theme.primary.main, color: theme.primary.contrast }}>
+                      {recentlyUsed.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold mb-2 px-2" style={{ color: theme.text.primary }}>
+                Git Commands
+              </h2>
+              <div className="space-y-1">
+                {Object.keys(commands).map(category => (
+                  <button
+                    key={category}
+                    className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                      activeCategory === category ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                    }`}
+                    style={{ 
+                      backgroundColor: activeCategory === category ? theme.primary.main : 'transparent',
+                      color: activeCategory === category ? theme.primary.main : theme.text.primary,
+                      borderLeft: activeCategory === category ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                    }}
+                    onClick={() => setActiveCategory(category)}
+                  >
+                    <span className="capitalize">{category}</span>
+                    <span className="ml-auto px-2 py-0.5 rounded-full text-xs" style={{ backgroundColor: theme.background.default, color: theme.text.secondary }}>
+                      {commands[category].length}
+                    </span>
+                  </button>
+                ))}
+                <button
+                  className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                    activeCategory === 'custom' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                  }`}
+                  style={{ 
+                    backgroundColor: activeCategory === 'custom' ? theme.primary.main : 'transparent',
+                    color: activeCategory === 'custom' ? theme.primary.main : theme.text.primary,
+                    borderLeft: activeCategory === 'custom' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                  }}
+                  onClick={() => setActiveCategory('custom')}
+                >
+                  <Edit className="mr-3" />
+                  <span>Custom Commands</span>
+                  {customCommands.length > 0 && (
+                    <span className="ml-auto px-2 py-0.5 rounded-full text-xs" style={{ backgroundColor: theme.primary.main, color: theme.primary.contrast }}>
+                      {customCommands.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold mb-2 px-2" style={{ color: theme.text.primary }}>
+                Other Views
+              </h2>
+              <div className="space-y-1">
+                <button
+                  className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                    view === 'workflows' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                  }`}
+                  style={{ 
+                    backgroundColor: view === 'workflows' ? theme.primary.main : 'transparent',
+                    color: view === 'workflows' ? theme.primary.main : theme.text.primary,
+                    borderLeft: view === 'workflows' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                  }}
+                  onClick={() => setView('workflows')}
+                >
+                  <GitPullRequest className="mr-3" />
+                  <span>Git Workflows</span>
+                </button>
+                <button
+                  className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                    view === 'scenarios' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                  }`}
+                  style={{ 
+                    backgroundColor: view === 'scenarios' ? theme.primary.main : 'transparent',
+                    color: view === 'scenarios' ? theme.primary.main : theme.text.primary,
+                    borderLeft: view === 'scenarios' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                  }}
+                  onClick={() => setView('scenarios')}
+                >
+                  <HelpCircle className="mr-3" />
+                  <span>Common Scenarios</span>
+                </button>
+                <button
+                  className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                    view === 'tutorials' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                  }`}
+                  style={{ 
+                    backgroundColor: view === 'tutorials' ? theme.primary.main : 'transparent',
+                    color: view === 'tutorials' ? theme.primary.main : theme.text.primary,
+                    borderLeft: view === 'tutorials' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                  }}
+                  onClick={() => setView('tutorials')}
+                >
+                  <Book className="mr-3" />
+                  <span>Tutorials</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </aside>
+        
+        {/* Main content area */}
+        <main className="flex-1 overflow-hidden flex flex-col">
+          {/* Tag filters */}
+          {availableTags.length > 0 && (
+            <div 
+              className="p-2 border-b overflow-x-auto whitespace-nowrap"
+              style={{ 
+                backgroundColor: theme.background.paper,
+                borderColor: theme.border.main
+              }}
+            >
+              <div className="flex items-center space-x-2">
+                <span style={{ color: theme.text.hint }}>Filter by:</span>
+                {availableTags.map(tag => (
+                  <button
+                    key={tag.id}
+                    className={`px-2 py-1 rounded-full text-xs flex items-center transition-colors`}
+                    style={{ 
+                      backgroundColor: filterTags.includes(tag.id) ? tag.color : 'transparent',
+                      color: filterTags.includes(tag.id) ? 'white' : theme.text.secondary,
+                      border: `1px solid ${filterTags.includes(tag.id) ? tag.color : theme.border.main}`
+                    }}
+                    onClick={() => {
+                      if (filterTags.includes(tag.id)) {
+                        setFilterTags(filterTags.filter(t => t !== tag.id));
+                      } else {
+                        setFilterTags([...filterTags, tag.id]);
+                      }
+                    }}
+                  >
+                    {tag.icon && <span className="mr-1">{tag.icon}</span>}
+                    {tag.name}
+                  </button>
+                ))}
+                
+                {filterTags.length > 0 && (
+                  <button
+                    className="px-2 py-1 rounded-full text-xs transition-colors"
+                    style={{ 
+                      backgroundColor: 'transparent',
+                      color: theme.text.secondary,
+                      border: `1px solid ${theme.border.main}`
+                    }}
+                    onClick={() => setFilterTags([])}
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* Content area */}
+          <div className="flex-1 overflow-hidden flex">
+            <div className="flex-1 overflow-y-auto">
+              {view === 'commands' && (
+                <div className="p-4">
+                  {activeCategory === 'favorites' && favorites.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-64 p-8">
+                      <Star size={64} style={{ color: theme.text.hint }} />
+                      <h3 className="text-xl font-semibold mt-4" style={{ color: theme.text.primary }}>No favorites yet</h3>
+                      <p className="text-center mt-2" style={{ color: theme.text.secondary }}>
+                        Star your favorite commands to access them quickly.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {activeCategory === 'favorites' && favorites.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {favorites.map(id => {
+                        const command = getCommandById(id);
+                        if (!command) return null;
+                        return <CommandCard key={id} command={command} showCategory={true} />;
+                      })}
+                    </div>
+                  )}
+                  
+                  {activeCategory === 'recent' && recentlyUsed.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-64 p-8">
+                      <Clock size={64} style={{ color: theme.text.hint }} />
+                      <h3 className="text-xl font-semibold mt-4" style={{ color: theme.text.primary }}>No recent commands</h3>
+                      <p className="text-center mt-2" style={{ color: theme.text.secondary }}>
+                        Commands you use will appear here for easy access.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {activeCategory === 'recent' && recentlyUsed.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {recentlyUsed.map(id => {
+                        const command = getCommandById(id);
+                        if (!command) return null;
+                        return <CommandCard key={id} command={command} showCategory={true} />;
+                      })}
+                    </div>
+                  )}
+                  
+                  {activeCategory === 'custom' && customCommands.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-64 p-8">
+                      <Edit size={64} style={{ color: theme.text.hint }} />
+                      <h3 className="text-xl font-semibold mt-4" style={{ color: theme.text.primary }}>No custom commands</h3>
+                      <p className="text-center mt-2" style={{ color: theme.text.secondary }}>
+                        Create your own commands for specific workflows.
+                      </p>
+                      <button
+                        className="mt-4 px-4 py-2 rounded-lg"
+                        style={{ 
+                          backgroundColor: theme.primary.main,
+                          color: theme.primary.contrast
+                        }}
+                        onClick={() => setIsAddingCommand(true)}
+                      >
+                        <Plus size={16} className="inline-block mr-2" />
+                        Create Command
+                      </button>
+                    </div>
+                  )}
+                  
+                  {activeCategory === 'custom' && customCommands.length > 0 && (
+                    <>
+                      <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-semibold" style={{ color: theme.text.primary }}>
+                          Custom Commands
+                        </h2>
+                        <button
+                          className="px-4 py-2 rounded-lg"
+                          style={{ 
+                            backgroundColor: theme.primary.main,
+                            color: theme.primary.contrast
+                          }}
+                          onClick={() => setIsAddingCommand(true)}
+                        >
+                          <Plus size={16} className="inline-block mr-2" />
+                          Add Command
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {customCommands.map(command => (
+                          <CommandCard key={command.id} command={{ ...command, category: 'custom' }} />
+                        ))}
+                      </div>
+                    </>
+                  )} catch (error) {
       console.error(error);
       return initialValue;
     }
