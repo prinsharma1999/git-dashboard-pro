@@ -77,50 +77,9 @@ const gitCommandsData = {
 
 const GitDashboardPro = () => {
   // Core state management
-  const [initializing, setInitializing] = useState(true);
   const [themeId, setThemeId] = useLocalStorage('themeId', 'dark');
   const [theme, setTheme] = useState(themes[themeId]);
-  const [view, setView] = useLocalStorage('dashboardView', 'commands');
-  const [sidebarOpen, setSidebarOpen] = useLocalStorage('sidebarOpen', true);
-  const [deviceSize, setDeviceSize] = useState('desktop');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterTags, setFilterTags] = useState([]);
-  const [activeCategory, setActiveCategory] = useLocalStorage('activeCategory', 'all');
-  const [favorites, setFavorites] = useLocalStorage('favorites', []);
-  const [recentlyUsed, setRecentlyUsed] = useLocalStorage('recentlyUsed', []);
-  const [customCommands, setCustomCommands] = useLocalStorage('customCommands', []);
-  const [commandHistory, setCommandHistory] = useLocalStorage('commandHistory', []);
-  const [showOnboarding, setShowOnboarding] = useLocalStorage('showOnboarding', true);
   const [commands, setCommands] = useLocalStorage('commands', gitCommandsData);
-  const [userPreferences, setUserPreferences] = useLocalStorage('userPreferences', {
-    fontSize: 'medium',
-    codeColorization: true,
-    showDescriptions: true,
-    showExamples: true,
-    tutorialMode: false,
-    terminalPreferences: {
-      fontFamily: 'Menlo, monospace',
-      showLineNumbers: true,
-      darkTheme: true
-    }
-  });
-
-  // UI state
-  const [loading, setLoading] = useState(false);
-  const [showTerminal, setShowTerminal] = useState(false);
-  const [terminalInput, setTerminalInput] = useState('');
-  const [terminalHistory, setTerminalHistory] = useState([
-    { type: 'system', content: 'Git Terminal Simulator v2.0' },
-    { type: 'system', content: 'Type "help" for available commands' }
-  ]);
-  const terminalRef = useRef(null);
-  const searchRef = useRef(null);
-  
-  // Additional UI state
-  const [activeModal, setActiveModal] = useState(null);
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [isAddingCommand, setIsAddingCommand] = useState(false);
-  const [isEditingCommand, setIsEditingCommand] = useState(null);
 
   // Effect for theme changes
   useEffect(() => {
@@ -129,52 +88,6 @@ const GitDashboardPro = () => {
     document.documentElement.style.setProperty('--color-background', themes[themeId].background.default);
     document.documentElement.style.setProperty('--color-text', themes[themeId].text.primary);
   }, [themeId]);
-
-  // Effect for initialization and resize handling
-  useEffect(() => {
-    const loadDashboard = async () => {
-      setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setLoading(false);
-      setInitializing(false);
-    };
-
-    const handleResize = () => {
-      if (window.innerWidth < 640) {
-        setDeviceSize('mobile');
-        setSidebarOpen(false);
-      } else if (window.innerWidth < 1024) {
-        setDeviceSize('tablet');
-      } else {
-        setDeviceSize('desktop');
-      }
-    };
-
-    loadDashboard();
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [setSidebarOpen]);
-
-  // Loading screen
-  if (loading || initializing) {
-    return (
-      <div 
-        className="flex flex-col items-center justify-center h-screen"
-        style={{ backgroundColor: theme.background.default }}
-      >
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        >
-          <RefreshCw size={48} style={{ color: theme.primary.main }} />
-        </motion.div>
-        <h1 className="mt-4 text-xl font-semibold" style={{ color: theme.text.primary }}>
-          Loading Git Dashboard Pro...
-        </h1>
-      </div>
-    );
-  }
 
   // Main render
   return (
