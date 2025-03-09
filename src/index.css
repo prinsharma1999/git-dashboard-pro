@@ -14,4 +14,11 @@ body {
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* Custom variables for theme colors */
+:root {
+  --color-primary: #3b82f6;
+  --color-background: #0f172a;
+  --color-text: #f8fafc;
 } 

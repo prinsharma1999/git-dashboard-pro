@@ -39,8 +39,41 @@ const useLocalStorage = (key, initialValue) => {
   return [storedValue, setValue];
 };
 
-// Import your themes, tagCategories, gitCommandsData, gitWorkflows, gitScenarios, and DummyTutorialData here
-// These should be moved to separate files in a proper implementation
+// Sample git commands data
+const gitCommandsData = {
+  basic: [
+    {
+      id: 'init',
+      command: 'git init',
+      description: 'Initialize a local Git repository',
+      tags: ['beginner', 'setup', 'local'],
+      category: 'basic'
+    },
+    {
+      id: 'clone',
+      command: 'git clone [url]',
+      description: 'Clone a repository from a remote source',
+      tags: ['beginner', 'remote'],
+      category: 'basic'
+    }
+  ],
+  branches: [
+    {
+      id: 'branch',
+      command: 'git branch',
+      description: 'List, create, or delete branches',
+      tags: ['beginner', 'branching'],
+      category: 'branches'
+    },
+    {
+      id: 'checkout',
+      command: 'git checkout [branch-name]',
+      description: 'Switch to a branch',
+      tags: ['beginner', 'branching'],
+      category: 'branches'
+    }
+  ]
+};
 
 const GitDashboardPro = () => {
   // Core state management
@@ -58,6 +91,7 @@ const GitDashboardPro = () => {
   const [customCommands, setCustomCommands] = useLocalStorage('customCommands', []);
   const [commandHistory, setCommandHistory] = useLocalStorage('commandHistory', []);
   const [showOnboarding, setShowOnboarding] = useLocalStorage('showOnboarding', true);
+  const [commands, setCommands] = useLocalStorage('commands', gitCommandsData);
   const [userPreferences, setUserPreferences] = useLocalStorage('userPreferences', {
     fontSize: 'medium',
     codeColorization: true,
@@ -81,6 +115,12 @@ const GitDashboardPro = () => {
   ]);
   const terminalRef = useRef(null);
   const searchRef = useRef(null);
+  
+  // Additional UI state
+  const [activeModal, setActiveModal] = useState(null);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [isAddingCommand, setIsAddingCommand] = useState(false);
+  const [isEditingCommand, setIsEditingCommand] = useState(null);
 
   // Effect for theme changes
   useEffect(() => {
@@ -142,9 +182,77 @@ const GitDashboardPro = () => {
       className="flex flex-col h-screen"
       style={{ backgroundColor: theme.background.default }}
     >
-      {/* Add your main content JSX here */}
-      <main className="flex-1 overflow-hidden">
-        {/* Your dashboard content */}
+      {/* Header */}
+      <header 
+        className="flex items-center justify-between p-4 border-b"
+        style={{ 
+          backgroundColor: theme.background.paper,
+          borderColor: theme.border.light,
+          color: theme.text.primary
+        }}
+      >
+        <div className="flex items-center">
+          <GitBranch size={24} className="mr-2" style={{ color: theme.primary.main }} />
+          <h1 className="text-xl font-bold">Git Dashboard Pro</h1>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button 
+            className="p-2 rounded-full hover:bg-opacity-10"
+            style={{ 
+              color: theme.text.primary,
+              backgroundColor: `${theme.background.elevated}30`
+            }}
+            onClick={() => setThemeId(themeId === 'light' ? 'dark' : 'light')}
+          >
+            {themeId === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+          </button>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="flex-1 overflow-hidden flex">
+        <div className="flex-1 p-4 overflow-y-auto">
+          <h2 className="text-2xl font-bold mb-4" style={{ color: theme.text.primary }}>
+            Welcome to Git Dashboard Pro
+          </h2>
+          <p className="mb-4" style={{ color: theme.text.secondary }}>
+            Your interactive guide to Git commands and workflows.
+          </p>
+          
+          {/* Command categories */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+            {Object.entries(commands).map(([category, categoryCommands]) => (
+              <div 
+                key={category}
+                className="p-4 rounded-lg shadow-md"
+                style={{ 
+                  backgroundColor: theme.background.paper,
+                  borderColor: theme.border.light
+                }}
+              >
+                <h3 className="text-lg font-semibold mb-2" style={{ color: theme.text.primary }}>
+                  {category.charAt(0).toUpperCase() + category.slice(1)}
+                </h3>
+                <ul>
+                  {categoryCommands.map(cmd => (
+                    <li 
+                      key={cmd.id}
+                      className="py-2 border-b last:border-0"
+                      style={{ borderColor: theme.border.light }}
+                    >
+                      <div className="font-mono" style={{ color: theme.primary.main }}>
+                        {cmd.command}
+                      </div>
+                      <div style={{ color: theme.text.secondary }}>
+                        {cmd.description}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
       </main>
     </div>
   );
