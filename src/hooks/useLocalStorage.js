@@ -38,4 +38,8 @@ const useLocalStorage = (key, initialValue) => {
   return [storedValue, setStoredValue];
 };
 
+// Add named export
+export { useLocalStorage };
+
+// Keep default export
 export default useLocalStorage; 

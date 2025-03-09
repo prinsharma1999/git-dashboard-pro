@@ -3,7 +3,6 @@ import {
   Moon, 
   Sun, 
   BookOpen, 
-  Code,
   BarChart,
   Home,
   Settings,
