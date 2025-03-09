@@ -1,5 +1,5 @@
 import React from 'react';
-import { Target, Award, Zap, Settings, Folder, Server, Users, GitBranch, GitCommit, GitMerge, Clock, Lock, AlertTriangle, LifeBuoy, GitPullRequest } from 'lucide-react';
+import { Target, Award, Zap, Settings, Folder, Server, Users, GitBranch, GitCommit, GitMerge, Clock, Lock, AlertTriangle, LifeBuoy } from 'lucide-react';
 
 export const tagCategories = [
   {

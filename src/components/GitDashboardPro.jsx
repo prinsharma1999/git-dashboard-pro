@@ -1,18 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  Search, Plus, Save, Trash2, Copy, Star, Edit, Command, GitBranch, GitCommit, GitMerge, 
-  GitPullRequest, Terminal, Book, Settings, HelpCircle, ChevronDown, ChevronRight, ChevronLeft,
-  Code, CheckCircle, X, Info, AlertTriangle, ArrowRight, Bookmark, Filter, RefreshCw,
-  Folder, Clock, Eye, RotateCcw, Download, Upload, FileText, Share, Zap, Award,
-  Users, Server, Database, Moon, Sun, BarChart2, Activity, Globe, Target, 
-  MessageSquare, Sliders, Tag, Paperclip, Codesandbox, Cpu, ExternalLink, Maximize,
-  PlusCircle, PlayCircle, Lock, Unlock, Layers, LifeBuoy, Coffee, ThumbsUp, Sidebar,
-  Monitor, Smartphone, Tablet, Layout, MessageCircle, Flag, CornerDownRight, Calendar
-} from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import React, { useState, useEffect } from 'react';
+import { GitBranch, Moon, Sun } from 'lucide-react';
 import { themes } from '../data/themes';
-import { tagCategories } from '../data/tagCategories';
 
 // Custom hooks
 const useLocalStorage = (key, initialValue) => {
@@ -79,7 +67,7 @@ const GitDashboardPro = () => {
   // Core state management
   const [themeId, setThemeId] = useLocalStorage('themeId', 'dark');
   const [theme, setTheme] = useState(themes[themeId]);
-  const [commands, setCommands] = useLocalStorage('commands', gitCommandsData);
+  const [commands] = useLocalStorage('commands', gitCommandsData);
 
   // Effect for theme changes
   useEffect(() => {
