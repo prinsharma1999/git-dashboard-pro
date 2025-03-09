@@ -7,18 +7,6 @@ import { toast, Toaster } from 'react-hot-toast';
 import { themes } from '../data/themes';
 import { tagCategories } from '../data/tagCategories';
 import { motion, AnimatePresence } from 'framer-motion';
-import { OpenAI } from 'openai';
-
-// Initialize OpenAI client with proper configuration
-const openai = new OpenAI({
-  apiKey: "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",
-  baseUrl: "https://openrouter.ai/api/v1",
-  dangerouslyAllowBrowser: true,
-  defaultHeaders: {
-    "HTTP-Referer": "https://gitdashboardpro.com",
-    "X-Title": "Git Dashboard Pro",
-  }
-});
 
 // Enhanced Learning paths data with 100+ lessons
 const learningPaths = {
@@ -166,43 +154,55 @@ const AICommandGenerator = ({ theme, onCommandGenerated }) => {
     setError(null);
     try {
       console.log("Generating command with prompt:", prompt);
-      const completion = await openai.chat.completions.create({
-        model: "mistralai/mistral-7b-instruct",
-        messages: [
-          {
-            role: "system",
-            content: `You are a Git expert assistant. Generate Git commands based on natural language descriptions.
-            Return ONLY valid JSON with no extra text. The JSON should have this structure:
+      
+      // Use direct fetch approach as recommended by OpenRouter
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer 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",
+          "HTTP-Referer": "https://gitdashboardpro.com",
+          "X-Title": "Git Dashboard Pro",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "model": "qwen/qwq-32b:free",
+          "messages": [
             {
-              "command": "the git command",
-              "description": "brief description",
-              "explanation": "detailed explanation of how the command works",
-              "tags": ["relevant", "tags"],
-              "safetyLevel": "safe|caution|dangerous",
-              "examples": [{"description": "example description", "command": "example command"}]
-            }`
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ]
+              "role": "system",
+              "content": `You are a Git expert assistant. Generate Git commands based on natural language descriptions.
+              Return ONLY valid JSON with no extra text. The JSON should have this structure:
+              {
+                "command": "the git command",
+                "description": "brief description",
+                "explanation": "detailed explanation of how the command works",
+                "tags": ["relevant", "tags"],
+                "safetyLevel": "safe|caution|dangerous",
+                "examples": [{"description": "example description", "command": "example command"}]
+              }`
+            },
+            {
+              "role": "user",
+              "content": prompt
+            }
+          ]
+        })
       });
-
+      
+      const completion = await response.json();
       console.log("AI Response received:", completion);
       
       try {
-        const response = completion.choices[0].message.content;
-        console.log("Response content:", response);
+        const responseContent = completion.choices[0].message.content;
+        console.log("Response content:", responseContent);
         
         // Try to extract JSON from the response
         let commandData;
         try {
-          commandData = JSON.parse(response);
+          commandData = JSON.parse(responseContent);
         } catch (jsonError) {
           console.error("Initial JSON parse failed:", jsonError);
           // Try to extract JSON from the response if it contains other text
-          const jsonMatch = response.match(/\{[\s\S]*\}/);
+          const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             try {
               commandData = JSON.parse(jsonMatch[0]);
@@ -663,17 +663,27 @@ const LearningView = ({ theme, progress, onComplete }) => {
   };
 
   const handleOptionSelect = (optionId) => {
-    if (!quizSubmitted) {
-      setSelectedOption(optionId);
+    try {
+      if (!quizSubmitted) {
+        setSelectedOption(optionId);
+      }
+    } catch (error) {
+      console.error("Error selecting option:", error);
+      // Prevent blanking by handling errors
     }
   };
 
   const handleQuizSubmit = () => {
-    if (!selectedOption || quizSubmitted) return;
-    
-    setQuizSubmitted(true);
-    const isCorrect = selectedOption === activeLesson.quiz.answer;
-    handleLessonComplete(activeLesson, isCorrect);
+    try {
+      if (!selectedOption || quizSubmitted) return;
+      
+      setQuizSubmitted(true);
+      const isCorrect = selectedOption === activeLesson.quiz.answer;
+      handleLessonComplete(activeLesson, isCorrect);
+    } catch (error) {
+      console.error("Error submitting quiz:", error);
+      toast.error("Something went wrong. Please try again.");
+    }
   };
 
   const isLessonCompleted = (lessonId) => {
@@ -1966,35 +1976,64 @@ const GitDashboardPro = () => {
   const getAiSuggestions = async (input) => {
     setIsLoadingAiSuggestions(true);
     try {
-      const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content: `You are a Git expert. Given the user's input command, suggest correct Git commands and explain why. Format your response as JSON:
-            {
-              "suggestions": [
-                {
-                  "command": "git command here",
-                  "explanation": "why this command is suggested",
-                  "example": "example usage"
-                }
-              ]
-            }`
-          },
-          {
-            role: "user",
-            content: `Suggest Git commands for: ${input}`
-          }
-        ],
-        extra_headers: {
+      // Use direct fetch approach as recommended by OpenRouter
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer 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",
           "HTTP-Referer": "https://gitdashboardpro.com",
           "X-Title": "Git Dashboard Pro",
-        }
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "model": "qwen/qwq-32b:free",
+          "messages": [
+            {
+              role: "system",
+              content: `You are a Git expert. Given the user's input command, suggest correct Git commands and explain why. Format your response as JSON:
+              {
+                "suggestions": [
+                  {
+                    "command": "git command here",
+                    "explanation": "why this command is suggested",
+                    "example": "example usage"
+                  }
+                ]
+              }`
+            },
+            {
+              role: "user",
+              content: `Suggest Git commands for: ${input}`
+            }
+          ]
+        })
       });
+      
+      const completion = await response.json();
 
-      const response = JSON.parse(completion.choices[0].message.content);
-      setAiSuggestions(response.suggestions);
+      try {
+        const responseContent = completion.choices[0].message.content;
+        console.log("AI Suggestion response:", responseContent);
+        
+        let jsonResponse;
+        try {
+          jsonResponse = JSON.parse(responseContent);
+        } catch (jsonError) {
+          console.error("Initial JSON parse failed:", jsonError);
+          // Try to extract JSON from the response if it contains other text
+          const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            jsonResponse = JSON.parse(jsonMatch[0]);
+          } else {
+            throw new Error("Could not extract JSON from response");
+          }
+        }
+
+        setAiSuggestions(jsonResponse.suggestions || []);
+      } catch (error) {
+        console.error('Failed to parse AI suggestion response:', error);
+        setAiSuggestions([]);
+      }
     } catch (error) {
       console.error('AI Error:', error);
       setAiSuggestions([]);
