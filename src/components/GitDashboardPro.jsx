@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   GitBranch, Moon, Sun, Search, Star, Filter, Terminal, 
-  Copy, X, ChevronRight, ChevronLeft, Plus, Edit, Trash2, ChevronDown, ExternalLink, Clock, Book, Command, GitPullRequest, Brain, Trophy, Target, Lock
+  Copy, X, ChevronRight, ChevronLeft, Plus, Edit, Trash2, ChevronDown, ExternalLink, Clock, Book, Command, GitPullRequest, Brain, Trophy, Target, Lock, List, Grid
 } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
 import { themes } from '../data/themes';
@@ -11,9 +11,13 @@ import { OpenAI } from 'openai';
 
 // Initialize OpenAI client with proper configuration
 const openai = new OpenAI({
-  baseUrl: "https://openrouter.ai/api/v1",
   apiKey: "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",
-  dangerouslyAllowBrowser: true
+  baseUrl: "https://openrouter.ai/api/v1",
+  dangerouslyAllowBrowser: true,
+  defaultHeaders: {
+    "HTTP-Referer": "https://gitdashboardpro.com",
+    "X-Title": "Git Dashboard Pro",
+  }
 });
 
 // Enhanced Learning paths data with 100+ lessons
@@ -163,7 +167,7 @@ const AICommandGenerator = ({ theme, onCommandGenerated }) => {
     try {
       console.log("Generating command with prompt:", prompt);
       const completion = await openai.chat.completions.create({
-        model: "anthropic/claude-instant-v1", // More reliable model
+        model: "mistralai/mistral-7b-instruct",
         messages: [
           {
             role: "system",
@@ -182,11 +186,7 @@ const AICommandGenerator = ({ theme, onCommandGenerated }) => {
             role: "user",
             content: prompt
           }
-        ],
-        extra_headers: {
-          "HTTP-Referer": "https://gitdashboardpro.com",
-          "X-Title": "Git Dashboard Pro",
-        }
+        ]
       });
 
       console.log("AI Response received:", completion);
@@ -1319,6 +1319,262 @@ const gitCommandsData = {
   ]
 };
 
+// Add CommandEditor component for customizing commands
+const CommandEditor = ({ command, onSave, onCancel, theme }) => {
+  const [editedCommand, setEditedCommand] = useState({
+    command: command ? command.command : '',
+    description: command ? command.description : '',
+    longDescription: command ? command.longDescription || '' : '',
+    tags: command ? [...command.tags] : [],
+    examples: command ? [...(command.examples || [])] : [],
+  });
+  
+  const [newExample, setNewExample] = useState({ description: '', command: '' });
+  const [selectedTags, setSelectedTags] = useState(
+    command && command.tags ? 
+    command.tags.filter(tag => Object.keys(tagCategories).includes(tag)) : 
+    []
+  );
+
+  // Handle form submission
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // Create updated command
+    const updatedCommand = {
+      ...command,
+      ...editedCommand,
+      id: command ? command.id : `custom-${Date.now()}`,
+      tags: selectedTags,
+      category: 'custom',
+    };
+    
+    onSave(updatedCommand);
+  };
+
+  // Add new example to the list
+  const handleAddExample = () => {
+    if (newExample.description && newExample.command) {
+      setEditedCommand({
+        ...editedCommand,
+        examples: [...(editedCommand.examples || []), { ...newExample }]
+      });
+      setNewExample({ description: '', command: '' });
+    }
+  };
+
+  // Remove example from the list
+  const handleRemoveExample = (index) => {
+    const updatedExamples = [...editedCommand.examples];
+    updatedExamples.splice(index, 1);
+    setEditedCommand({
+      ...editedCommand,
+      examples: updatedExamples
+    });
+  };
+
+  // Toggle tag selection
+  const handleTagToggle = (tagId) => {
+    if (selectedTags.includes(tagId)) {
+      setSelectedTags(selectedTags.filter(t => t !== tagId));
+    } else {
+      setSelectedTags([...selectedTags, tagId]);
+    }
+  };
+
+  return (
+    <div
+      className="p-6 rounded-lg"
+      style={{ backgroundColor: theme.background.paper }}
+    >
+      <h3 className="text-xl font-semibold mb-4" style={{ color: theme.text.primary }}>
+        {command ? 'Edit Command' : 'Create New Command'}
+      </h3>
+      
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block mb-1 text-sm font-medium" style={{ color: theme.text.primary }}>
+            Command
+          </label>
+          <input
+            type="text"
+            className="w-full p-2 rounded-lg"
+            style={{ 
+              backgroundColor: theme.background.elevated,
+              color: theme.text.primary,
+              border: `1px solid ${theme.border.main}`
+            }}
+            value={editedCommand.command}
+            onChange={(e) => setEditedCommand({ ...editedCommand, command: e.target.value })}
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block mb-1 text-sm font-medium" style={{ color: theme.text.primary }}>
+            Short Description
+          </label>
+          <input
+            type="text"
+            className="w-full p-2 rounded-lg"
+            style={{ 
+              backgroundColor: theme.background.elevated,
+              color: theme.text.primary,
+              border: `1px solid ${theme.border.main}`
+            }}
+            value={editedCommand.description}
+            onChange={(e) => setEditedCommand({ ...editedCommand, description: e.target.value })}
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block mb-1 text-sm font-medium" style={{ color: theme.text.primary }}>
+            Detailed Explanation
+          </label>
+          <textarea
+            className="w-full p-2 rounded-lg resize-none"
+            style={{ 
+              backgroundColor: theme.background.elevated,
+              color: theme.text.primary,
+              border: `1px solid ${theme.border.main}`
+            }}
+            rows="4"
+            value={editedCommand.longDescription}
+            onChange={(e) => setEditedCommand({ ...editedCommand, longDescription: e.target.value })}
+          />
+        </div>
+        
+        <div>
+          <label className="block mb-1 text-sm font-medium" style={{ color: theme.text.primary }}>
+            Tags
+          </label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {Object.entries(tagCategories).map(([tagId, tag]) => (
+              <button
+                key={tagId}
+                type="button"
+                className={`px-2 py-1 rounded-full text-xs transition-colors`}
+                style={{ 
+                  backgroundColor: selectedTags.includes(tagId) ? tag.color : `${tag.color}30`,
+                  color: selectedTags.includes(tagId) ? '#fff' : theme.text.primary
+                }}
+                onClick={() => handleTagToggle(tagId)}
+              >
+                {tag.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div>
+          <label className="block mb-1 text-sm font-medium" style={{ color: theme.text.primary }}>
+            Examples
+          </label>
+          
+          {editedCommand.examples && editedCommand.examples.length > 0 && (
+            <div className="mb-3 space-y-2">
+              {editedCommand.examples.map((example, index) => (
+                <div 
+                  key={index}
+                  className="p-2 rounded-lg flex items-start justify-between"
+                  style={{ backgroundColor: theme.background.elevated }}
+                >
+                  <div className="flex-1">
+                    <div className="text-sm font-medium mb-1" style={{ color: theme.text.primary }}>
+                      {example.description}
+                    </div>
+                    <code className="text-sm" style={{ color: theme.primary.main }}>
+                      {example.command}
+                    </code>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    className="p-1 rounded-lg"
+                    style={{ color: theme.error.main }}
+                    onClick={() => handleRemoveExample(index)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          <div className="flex gap-2 items-start">
+            <div className="flex-1 space-y-2">
+              <input
+                type="text"
+                className="w-full p-2 rounded-lg"
+                style={{ 
+                  backgroundColor: theme.background.elevated,
+                  color: theme.text.primary,
+                  border: `1px solid ${theme.border.main}`
+                }}
+                placeholder="Example description"
+                value={newExample.description}
+                onChange={(e) => setNewExample({ ...newExample, description: e.target.value })}
+              />
+              
+              <input
+                type="text"
+                className="w-full p-2 rounded-lg"
+                style={{ 
+                  backgroundColor: theme.background.elevated,
+                  color: theme.text.primary,
+                  border: `1px solid ${theme.border.main}`
+                }}
+                placeholder="Example command"
+                value={newExample.command}
+                onChange={(e) => setNewExample({ ...newExample, command: e.target.value })}
+              />
+            </div>
+            
+            <button
+              type="button"
+              className="mt-2 p-2 rounded-lg"
+              style={{ 
+                backgroundColor: theme.primary.main,
+                color: theme.primary.contrast
+              }}
+              onClick={handleAddExample}
+              disabled={!newExample.description || !newExample.command}
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="flex gap-3 justify-end mt-6">
+          <button
+            type="button"
+            className="px-4 py-2 rounded-lg"
+            style={{ 
+              backgroundColor: theme.background.elevated,
+              color: theme.text.primary
+            }}
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          
+          <button
+            type="submit"
+            className="px-4 py-2 rounded-lg"
+            style={{ 
+              backgroundColor: theme.primary.main,
+              color: theme.primary.contrast
+            }}
+          >
+            Save Command
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
 const GitDashboardPro = () => {
   // Core state management
   const [themeId, setThemeId] = useLocalStorage('themeId', 'dark');
@@ -1630,7 +1886,26 @@ const GitDashboardPro = () => {
     
     // If viewing custom, only show custom commands
     if (activeCategory === 'custom') {
-      return { custom: customCommands };
+      if (customCommands && customCommands.length > 0) {
+        const filtered = customCommands.filter(command => {
+          // Filter by search
+          if (searchTerm && !command.command.toLowerCase().includes(searchTerm.toLowerCase()) && 
+              !command.description.toLowerCase().includes(searchTerm.toLowerCase())) {
+            return false;
+          }
+          
+          // Filter by tags
+          if (filterTags.length > 0) {
+            const commandTags = command.tags || [];
+            return filterTags.some(tag => commandTags.includes(tag));
+          }
+          
+          return true;
+        });
+        
+        return { custom: filtered };
+      }
+      return { custom: [] };
     }
     
     // If viewing a specific category, only show commands from that category
@@ -1662,7 +1937,7 @@ const GitDashboardPro = () => {
     });
     
     // Add custom commands if viewing all
-    if (customCommands.length > 0) {
+    if (customCommands && customCommands.length > 0) {
       const filtered = customCommands.filter(command => {
         // Filter by search
         if (searchTerm && !command.command.toLowerCase().includes(searchTerm.toLowerCase()) && 
@@ -1732,325 +2007,408 @@ const GitDashboardPro = () => {
   const handleTerminalCommand = useCallback((e) => {
     e.preventDefault();
     
-    if (!terminalInput.trim()) return;
-    
-    setTerminalHistory(prev => [
-      ...prev,
-      { type: 'input', content: terminalInput }
-    ]);
-    
-    const input = terminalInput.trim();
-    
-    if (input === 'clear' || input === 'cls') {
-      setTerminalHistory([
-        { type: 'system', content: 'Git Terminal Simulator v2.0' },
-        { type: 'system', content: 'Type "help" for available commands' }
-      ]);
-    } else if (input === 'help') {
-      setTerminalHistory(prev => [
-        ...prev,
-        { 
-          type: 'output', 
-          content: `Available commands:
-help                   - Show this help message
-clear, cls             - Clear terminal
-git [command]          - Simulate a git command
-favorites              - List favorite commands
-ai                     - Toggle AI suggestions
-exit                   - Close terminal`
-        }
-      ]);
-    } else if (input === 'exit') {
-      setShowTerminal(false);
-    } else if (input === 'favorites') {
-      const favoriteCommands = favorites.map(id => {
-        const cmd = getCommandById(id);
-        return cmd ? `${cmd.command} - ${cmd.description}` : null;
-      }).filter(Boolean);
-      
-      const output = favoriteCommands.length > 0
-        ? favoriteCommands.join('\n')
-        : 'No favorite commands yet';
+    try {
+      if (!terminalInput.trim()) return;
       
       setTerminalHistory(prev => [
         ...prev,
-        { type: 'output', content: output }
+        { type: 'input', content: terminalInput }
       ]);
-    } else if (input === 'ai') {
-      setShowAiSuggestions(!showAiSuggestions);
-      setTerminalHistory(prev => [
-        ...prev,
-        { type: 'system', content: `AI suggestions ${showAiSuggestions ? 'disabled' : 'enabled'}` }
-      ]);
-    } else if (input.startsWith('git ')) {
-      const gitCmd = input.substring(4);
-      const allCommands = [
-        ...Object.values(commands).flat(),
-        ...customCommands
-      ];
       
-      const matchingCommand = allCommands.find(cmd => 
-        cmd.command.includes(gitCmd) || gitCmd.includes(cmd.command)
-      );
+      const input = terminalInput.trim();
       
-      if (matchingCommand) {
-        setTerminalHistory(prev => [
-          ...prev,
-          { type: 'output', content: `Simulating: ${matchingCommand.command}\n${matchingCommand.description}` }
+      if (input === 'clear' || input === 'cls') {
+        setTerminalHistory([
+          { type: 'system', content: 'Git Terminal Simulator v2.0' },
+          { type: 'system', content: 'Type "help" for available commands' }
         ]);
-        
-        setRecentlyUsed(prev => {
-          const filtered = prev.filter(id => id !== matchingCommand.id);
-          return [matchingCommand.id, ...filtered].slice(0, 10);
-        });
-      } else {
-        // Get AI suggestions for incorrect commands
-        getAiSuggestions(gitCmd);
+      } else if (input === 'help') {
         setTerminalHistory(prev => [
           ...prev,
-          { type: 'error', content: `Command not found: ${gitCmd}` }
+          { 
+            type: 'output', 
+            content: `Available commands:
+  help                   - Show this help message
+  clear, cls             - Clear terminal
+  git [command]          - Simulate a git command
+  favorites              - List favorite commands
+  ai                     - Toggle AI suggestions
+  exit                   - Close terminal`
+          }
+        ]);
+      } else if (input === 'exit') {
+        setShowTerminal(false);
+      } else if (input === 'favorites') {
+        const favoriteCommands = favorites.map(id => {
+          const cmd = getCommandById(id);
+          return cmd ? `${cmd.command} - ${cmd.description}` : null;
+        }).filter(Boolean);
+        
+        const output = favoriteCommands.length > 0
+          ? favoriteCommands.join('\n')
+          : 'No favorite commands yet';
+        
+        setTerminalHistory(prev => [
+          ...prev,
+          { type: 'output', content: output }
+        ]);
+      } else if (input === 'ai') {
+        setShowAiSuggestions(!showAiSuggestions);
+        setTerminalHistory(prev => [
+          ...prev,
+          { type: 'system', content: `AI suggestions ${showAiSuggestions ? 'disabled' : 'enabled'}` }
+        ]);
+      } else if (input.startsWith('git ')) {
+        const gitCmd = input.substring(4);
+        const allCommands = [
+          ...Object.values(commands).flat(),
+          ...customCommands
+        ];
+        
+        const matchingCommand = allCommands.find(cmd => 
+          cmd.command.includes(gitCmd) || gitCmd.includes(cmd.command)
+        );
+        
+        if (matchingCommand) {
+          // Add suggestions for related commands (3 before and 3 after)
+          const cmdCategory = matchingCommand.category;
+          const categoryCommands = cmdCategory === 'custom' 
+            ? customCommands 
+            : commands[cmdCategory] || [];
+          
+          const cmdIndex = categoryCommands.findIndex(c => c.id === matchingCommand.id);
+          let relatedCommands = [];
+          
+          if (cmdIndex > -1) {
+            const start = Math.max(0, cmdIndex - 3);
+            const end = Math.min(categoryCommands.length, cmdIndex + 4);
+            relatedCommands = categoryCommands.slice(start, end)
+              .filter(c => c.id !== matchingCommand.id)
+              .map(c => `${c.command} - ${c.description}`);
+          }
+          
+          setTerminalHistory(prev => [
+            ...prev,
+            { type: 'output', content: `Simulating: ${matchingCommand.command}\n${matchingCommand.description}` },
+            { type: 'output', content: `\nRelated commands you might need:\n${relatedCommands.join('\n')}` }
+          ]);
+          
+          setRecentlyUsed(prev => {
+            const filtered = prev.filter(id => id !== matchingCommand.id);
+            return [matchingCommand.id, ...filtered].slice(0, 10);
+          });
+        } else {
+          // Get AI suggestions for incorrect commands
+          getAiSuggestions(gitCmd);
+          setTerminalHistory(prev => [
+            ...prev,
+            { type: 'error', content: `Command not found: ${gitCmd}` }
+          ]);
+        }
+      } else {
+        setTerminalHistory(prev => [
+          ...prev,
+          { type: 'error', content: `Unknown command: ${input}` }
         ]);
       }
-    } else {
+      
+      setTerminalInput('');
+      
+      if (terminalRef.current) {
+        setTimeout(() => {
+          terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+        }, 0);
+      }
+    } catch (error) {
+      console.error("Terminal error:", error);
       setTerminalHistory(prev => [
-        ...prev,
-        { type: 'error', content: `Unknown command: ${input}` }
+        ...prev, 
+        { type: 'error', content: 'An error occurred while processing your command.' }
       ]);
+      setTerminalInput('');
     }
-    
-    setTerminalInput('');
-    
-    if (terminalRef.current) {
-      setTimeout(() => {
-        terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-      }, 0);
-    }
-  }, [commands, customCommands, favorites, setRecentlyUsed, terminalInput, showAiSuggestions]);
+  }, [commands, customCommands, favorites, setRecentlyUsed, terminalInput, showAiSuggestions, getCommandById]);
 
   // Right Panel Component
   const RightPanel = ({ command }) => {
-    if (!command) return null;
-
+    const [showUsageStats, setShowUsageStats] = useState(false);
+    const [showExamples, setShowExamples] = useState(true);
+    
+    if (!command && rightPanelView === 'edit') {
+      return (
+        <CommandEditor
+          command={commandToEdit}
+          onSave={handleSaveCommand}
+          onCancel={() => {
+            setIsEditingCommand(false);
+            setCommandToEdit(null);
+            setRightPanelView('detail');
+          }}
+          theme={theme}
+        />
+      );
+    }
+    
+    if (!command) {
+      return (
+        <div 
+          className="w-96 h-full border-l overflow-y-auto flex-shrink-0"
+          style={{ borderColor: theme.border.main }}
+        >
+          <div className="flex flex-col items-center justify-center h-full p-6">
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
+              style={{ backgroundColor: `${theme.primary.main}20` }}
+            >
+              <GitBranch size={32} style={{ color: theme.primary.main }} />
+            </div>
+            <h3 className="text-xl font-semibold mb-2" style={{ color: theme.text.primary }}>
+              Command Details
+            </h3>
+            <p className="text-center mb-6" style={{ color: theme.text.secondary }}>
+              Select a command to view details or click "New Command" to create your own
+            </p>
+            <button
+              className="px-4 py-2 rounded-lg flex items-center"
+              style={{ 
+                backgroundColor: theme.primary.main,
+                color: theme.primary.contrast
+              }}
+              onClick={() => {
+                setCommandToEdit(null);
+                setIsEditingCommand(true);
+                setRightPanelView('edit');
+              }}
+            >
+              <Plus size={16} className="mr-2" />
+              New Command
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
     return (
       <div 
-        className="h-full overflow-y-auto"
-        style={{ backgroundColor: theme.background.paper }}
+        className="w-96 h-full border-l overflow-y-auto flex-shrink-0"
+        style={{ borderColor: theme.border.main }}
       >
-        <div className="sticky top-0 z-10 p-4 border-b flex justify-between items-center"
-          style={{ 
-            backgroundColor: theme.background.paper,
-            borderColor: theme.border.light
-          }}
-        >
-          <h2 className="text-lg font-semibold" style={{ color: theme.text.primary }}>
-            Command Details
-          </h2>
-          <button
-            className="p-2 rounded hover:bg-opacity-10"
-            style={{ color: theme.text.secondary }}
-            onClick={() => setRightPanelOpen(false)}
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="p-4 space-y-6">
-          {/* Command Header */}
-          <div>
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-semibold" style={{ color: theme.text.primary }}>
+              Command Details
+            </h3>
+            <button
+              className="p-2 rounded-lg"
+              style={{ color: theme.text.secondary }}
+              onClick={() => setRightPanelOpen(false)}
+            >
+              <X size={18} />
+            </button>
+          </div>
+          
+          <div className="mb-6">
             <div className="flex items-center justify-between">
-              <span 
-                className="px-2 py-1 rounded text-sm"
+              <div
+                className="px-3 py-1 rounded text-sm"
                 style={{ 
-                  backgroundColor: theme.secondary.main,
-                  color: theme.secondary.contrast
+                  backgroundColor: `${theme.primary.main}20`,
+                  color: theme.primary.main
                 }}
               >
                 {command.category}
-              </span>
-              <div className="flex items-center gap-2">
+              </div>
+              
+              <div className="flex items-center space-x-2">
                 <button
-                  className={`p-1 rounded hover:bg-opacity-10 ${
-                    favorites.includes(command.id) ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'
-                  }`}
+                  className="p-1 rounded-lg"
+                  style={{ color: favorites.includes(command.id) ? theme.primary.main : theme.text.secondary }}
                   onClick={() => toggleFavorite(command.id)}
                 >
-                  <Star size={20} fill={favorites.includes(command.id) ? "currentColor" : "none"} />
+                  <Star size={18} fill={favorites.includes(command.id) ? theme.primary.main : 'none'} />
                 </button>
+                
                 <button
-                  className="p-1 rounded hover:bg-opacity-10"
+                  className="p-1 rounded-lg"
                   style={{ color: theme.text.secondary }}
                   onClick={() => handleCopyCommand(command.command, command.id)}
                 >
-                  <Copy size={20} />
+                  <Copy size={18} />
                 </button>
               </div>
             </div>
-            <h1 
-              className="font-mono text-xl font-bold mt-2" 
+            
+            <h2 
+              className="text-xl font-mono mt-4 mb-2 break-all"
               style={{ color: theme.primary.main }}
             >
               {command.command}
-            </h1>
-            <p className="mt-2" style={{ color: theme.text.secondary }}>
+            </h2>
+            
+            <p className="mb-4" style={{ color: theme.text.secondary }}>
               {command.description}
             </p>
-          </div>
-
-          {/* Long Description */}
-          {command.longDescription && (
-            <div>
-              <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
-                Description
-              </h3>
-              <p className="text-sm" style={{ color: theme.text.secondary }}>
-                {command.longDescription}
-              </p>
-            </div>
-          )}
-
-          {/* Examples */}
-          {command.examples && command.examples.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
-                Examples
-              </h3>
-              <div className="space-y-3">
-                {command.examples.map((example, index) => (
-                  <div 
-                    key={index}
-                    className="p-3 rounded"
-                    style={{ backgroundColor: theme.background.elevated }}
-                  >
-                    <div className="mb-2 text-sm" style={{ color: theme.text.secondary }}>
-                      {example.description}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <code className="font-mono" style={{ color: theme.primary.main }}>
-                        {example.command}
-                      </code>
-                      <button
-                        className="p-1 rounded hover:bg-opacity-10"
-                        style={{ color: theme.text.secondary }}
-                        onClick={() => handleCopyCommand(example.command)}
+            
+            {command.longDescription && (
+              <div className="mb-4">
+                <h4 className="text-sm font-semibold mb-1" style={{ color: theme.text.primary }}>
+                  Details
+                </h4>
+                <p className="text-sm" style={{ color: theme.text.secondary }}>
+                  {command.longDescription}
+                </p>
+              </div>
+            )}
+            
+            {command.tags && command.tags.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-semibold mb-1" style={{ color: theme.text.primary }}>
+                  Tags
+                </h4>
+                <div className="flex flex-wrap gap-1">
+                  {command.tags.map((tagId, idx) => {
+                    const tag = tagCategories[tagId] || { name: tagId, color: '#777' };
+                    return (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 rounded-full text-xs"
+                        style={{ 
+                          backgroundColor: tag.color || '#777',
+                          color: '#fff'
+                        }}
                       >
-                        <Copy size={16} />
-                      </button>
+                        {tag.name || tagId}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="mb-6">
+            <div className="flex justify-between mb-2">
+              <h4 className="text-sm font-semibold" style={{ color: theme.text.primary }}>
+                Related Commands
+              </h4>
+            </div>
+            
+            <div className="space-y-2">
+              {getRelatedCommands(command).map(cmd => (
+                <button
+                  key={cmd.id}
+                  className="w-full p-2 rounded-lg text-left flex justify-between items-center"
+                  style={{ 
+                    backgroundColor: theme.background.elevated,
+                    color: theme.text.primary
+                  }}
+                  onClick={() => setCommandDetailId(cmd.id)}
+                >
+                  <div className="overflow-hidden">
+                    <div className="font-mono text-sm truncate" style={{ color: theme.primary.main }}>
+                      {cmd.command}
+                    </div>
+                    <div className="text-xs truncate" style={{ color: theme.text.secondary }}>
+                      {cmd.description}
                     </div>
                   </div>
-                ))}
-              </div>
+                  <ChevronRight size={16} style={{ color: theme.text.secondary }} />
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          {command.examples && command.examples.length > 0 && (
+            <div className="mt-4">
+              <button
+                className="text-sm flex items-center gap-1"
+                style={{ color: theme.primary.main }}
+                onClick={() => setShowExamples(!showExamples)}
+              >
+                {showExamples ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                {showExamples ? 'Hide Examples' : 'Show Examples'}
+              </button>
+              
+              {showExamples && (
+                <div className="mt-2 space-y-2">
+                  {command.examples.map((example, index) => (
+                    <div 
+                      key={index}
+                      className="p-2 rounded text-sm"
+                      style={{ backgroundColor: theme.background.elevated }}
+                    >
+                      <div className="mb-1" style={{ color: theme.text.secondary }}>
+                        {example.description}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <code className="font-mono" style={{ color: theme.primary.main }}>
+                          {example.command}
+                        </code>
+                        <button
+                          className="p-1 rounded hover:bg-opacity-10"
+                          style={{ color: theme.text.secondary }}
+                          onClick={() => handleCopyCommand(example.command)}
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
-
-          {/* Options */}
-          {command.options && command.options.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
-                Options
-              </h3>
-              <div className="space-y-2">
-                {command.options.map((option, index) => (
-                  <div 
-                    key={index}
-                    className="flex items-start p-2 rounded"
-                    style={{ backgroundColor: theme.background.elevated }}
-                  >
-                    <code 
-                      className="font-mono text-sm mr-3 whitespace-nowrap"
-                      style={{ color: theme.primary.main }}
-                    >
-                      {option.flag}
+          
+          <button
+            className="w-full mt-6 mb-2 text-sm flex items-center gap-1 justify-between"
+            style={{ color: theme.text.secondary }}
+            onClick={() => setShowUsageStats(!showUsageStats)}
+          >
+            <span>Command Remarks</span>
+            {showUsageStats ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </button>
+          
+          {showUsageStats && (
+            <div 
+              className="p-3 rounded-lg text-sm space-y-2"
+              style={{ backgroundColor: theme.background.elevated }}
+            >
+              <p style={{ color: theme.text.secondary }}>
+                <strong>Common Use Cases:</strong><br />
+                {command.longDescription || command.description}
+              </p>
+              
+              <p style={{ color: theme.text.secondary }}>
+                <strong>Often Used With:</strong>
+              </p>
+              <div className="space-y-1">
+                {getRelatedCommands(command).slice(0, 3).map((cmd, idx) => (
+                  <div key={idx} className="text-sm">
+                    <code className="px-2 py-0.5 rounded" style={{ backgroundColor: theme.background.paper }}>
+                      {cmd.command}
                     </code>
-                    <span className="text-sm" style={{ color: theme.text.secondary }}>
-                      {option.description}
+                    <span className="ml-2 text-xs" style={{ color: theme.text.secondary }}>
+                      {cmd.description}
                     </span>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
-          {/* Related Commands */}
-          {command.relatedCommands && command.relatedCommands.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
-                Related Commands
-              </h3>
-              <div className="space-y-2">
-                {command.relatedCommands.map(cmdId => {
-                  const relatedCmd = getCommandById(cmdId);
-                  if (!relatedCmd) return null;
-                  return (
-                    <button
-                      key={cmdId}
-                      className="w-full text-left p-2 rounded hover:bg-opacity-10 flex items-center justify-between"
-                      style={{ 
-                        backgroundColor: theme.background.elevated,
-                        color: theme.text.secondary
-                      }}
-                      onClick={() => setCommandDetailId(cmdId)}
-                    >
-                      <span className="font-mono text-sm" style={{ color: theme.primary.main }}>
-                        {relatedCmd.command}
-                      </span>
-                      <ChevronRight size={16} />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Usage Statistics */}
-          <div>
-            <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
-              Usage Statistics
-            </h3>
-            <div 
-              className="p-3 rounded space-y-2"
-              style={{ backgroundColor: theme.background.elevated }}
+          
+          <div className="flex gap-2 justify-end mt-6">
+            <button
+              className="px-3 py-1 rounded-lg flex items-center"
+              style={{ 
+                backgroundColor: theme.background.elevated,
+                color: theme.text.primary
+              }}
+              onClick={() => handleEditCommand(command)}
             >
-              <div className="flex justify-between text-sm">
-                <span style={{ color: theme.text.secondary }}>Times Used:</span>
-                <span style={{ color: theme.text.primary }}>{command.usage || 0}</span>
-              </div>
-              {command.lastUsed && (
-                <div className="flex justify-between text-sm">
-                  <span style={{ color: theme.text.secondary }}>Last Used:</span>
-                  <span style={{ color: theme.text.primary }}>
-                    {new Date(command.lastUsed).toLocaleDateString()}
-                  </span>
-                </div>
-              )}
-            </div>
+              <Edit size={16} className="mr-1" />
+              Customize
+            </button>
           </div>
-
-          {/* External Links */}
-          {command.links && command.links.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
-                Learn More
-              </h3>
-              <div className="space-y-2">
-                {command.links.map((link, index) => (
-                  <a
-                    key={index}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block p-2 rounded text-sm hover:bg-opacity-10 flex items-center"
-                    style={{ 
-                      backgroundColor: theme.background.elevated,
-                      color: theme.primary.main
-                    }}
-                  >
-                    <ExternalLink size={16} className="mr-2" />
-                    {link.title}
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -2123,6 +2481,60 @@ exit                   - Close terminal`
     setShowTerminal(prev => !prev);
   }, [showTerminal]);
 
+  // Add state for view mode (grid or list)
+  const [viewMode, setViewMode] = useState('grid');
+
+  // Add state for command editing
+  const [isEditingCommand, setIsEditingCommand] = useState(false);
+  const [commandToEdit, setCommandToEdit] = useState(null);
+  
+  // Handle command edit
+  const handleEditCommand = (command) => {
+    setCommandToEdit(command);
+    setIsEditingCommand(true);
+    setRightPanelView('edit');
+  };
+  
+  // Handle saving edited command
+  const handleSaveCommand = (updatedCommand) => {
+    // If editing an existing command
+    if (commandToEdit && commandToEdit.id) {
+      if (commandToEdit.category === 'custom') {
+        // Update existing custom command
+        setCustomCommands(prevCommands => 
+          prevCommands.map(cmd => 
+            cmd.id === updatedCommand.id ? updatedCommand : cmd
+          )
+        );
+      } else {
+        // Create new custom command based on system command
+        const newCommand = {
+          ...updatedCommand,
+          id: `custom-${Date.now()}`,
+          originalId: commandToEdit.id, // Store reference to original
+          category: 'custom'
+        };
+        setCustomCommands(prev => [...prev, newCommand]);
+      }
+    } else {
+      // Create brand new custom command
+      const newCommand = {
+        ...updatedCommand,
+        usage: 0,
+        lastUsed: null,
+        usageByWeekday: Array(7).fill(0),
+        usageByHour: Array(24).fill(0),
+        usageHistory: []
+      };
+      setCustomCommands(prev => [...prev, newCommand]);
+    }
+    
+    setIsEditingCommand(false);
+    setCommandToEdit(null);
+    setActiveCategory('custom');
+    toast.success('Command saved successfully!');
+  };
+
   // Main render
   return (
     <div 
@@ -2180,6 +2592,16 @@ exit                   - Close terminal`
           >
             <Terminal size={20} />
           </button>
+          
+          <button
+            className="p-2 rounded-lg"
+            style={{ color: theme.text.secondary }}
+            onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+            aria-label="Toggle View Mode"
+          >
+            {viewMode === 'grid' ? <List size={20} /> : <Grid size={20} />}
+          </button>
+          
           <button
             className="p-2 rounded-lg"
             style={{ color: theme.text.secondary }}
@@ -2234,6 +2656,9 @@ exit                   - Close terminal`
                     onClick={() => setActiveCategory('all')}
                   >
                     <span>All Commands</span>
+                    <span className="ml-auto bg-opacity-20 px-2 py-0.5 rounded text-xs" style={{ backgroundColor: theme.primary.main }}>
+                      {Object.values(commands).flat().length + (customCommands ? customCommands.length : 0)}
+                    </span>
                   </button>
                 </li>
                 <li>
@@ -2247,6 +2672,9 @@ exit                   - Close terminal`
                   >
                     <Star size={16} className="mr-2" style={{ color: theme.primary.main }} />
                     <span>Favorites</span>
+                    <span className="ml-auto bg-opacity-20 px-2 py-0.5 rounded text-xs" style={{ backgroundColor: theme.primary.main }}>
+                      {favorites.length}
+                    </span>
                   </button>
                 </li>
                 <li>
@@ -2341,20 +2769,113 @@ exit                   - Close terminal`
             <div className="flex-1 flex">
               {/* Command list */}
               <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold" style={{ color: theme.text.primary }}>
+                    {activeCategory === 'all' ? 'All Commands' : 
+                     activeCategory === 'favorites' ? 'Favorite Commands' :
+                     activeCategory === 'recent' ? 'Recently Used' :
+                     activeCategory === 'custom' ? 'Custom Commands' :
+                     `${activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} Commands`}
+                  </h2>
+                  
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      className="px-3 py-1 rounded-lg text-sm"
+                      style={{ 
+                        backgroundColor: theme.background.elevated,
+                        color: theme.text.primary,
+                        border: `1px solid ${theme.border.main}`
+                      }}
+                      placeholder="Search commands..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    
+                    <button 
+                      className="p-2 rounded-lg"
+                      style={{ color: theme.primary.main }}
+                      onClick={() => setViewMode('grid')}
+                      aria-label="Grid View"
+                    >
+                      <Grid size={16} style={{ opacity: viewMode === 'grid' ? 1 : 0.5 }} />
+                    </button>
+                    
+                    <button 
+                      className="p-2 rounded-lg"
+                      style={{ color: theme.primary.main }}
+                      onClick={() => setViewMode('list')}
+                      aria-label="List View"
+                    >
+                      <List size={16} style={{ opacity: viewMode === 'list' ? 1 : 0.5 }} />
+                    </button>
+                  </div>
+                </div>
+                
                 {Object.entries(filteredCommands()).map(([category, categoryCommands]) => (
                   <div key={category} className="mb-6">
-                    <h2 className="text-lg font-semibold mb-3 capitalize" style={{ color: theme.text.primary }}>
+                    <h3 className="text-lg font-semibold mb-3 capitalize" style={{ color: theme.text.primary }}>
                       {category}
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {categoryCommands.map(command => (
-                        <CommandCard
-                          key={command.id}
-                          command={command}
-                          showCategory={activeCategory === 'all' || activeCategory === 'favorites' || activeCategory === 'recent'}
-                        />
-                      ))}
-                    </div>
+                    </h3>
+                    
+                    {viewMode === 'grid' ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {categoryCommands.map(command => (
+                          <CommandCard
+                            key={command.id}
+                            command={command}
+                            showCategory={activeCategory === 'all' || activeCategory === 'favorites' || activeCategory === 'recent'}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {categoryCommands.map(command => (
+                          <div 
+                            key={command.id}
+                            className="p-3 rounded-lg flex items-center justify-between"
+                            style={{ 
+                              backgroundColor: theme.background.paper,
+                              border: `1px solid ${favorites.includes(command.id) ? theme.primary.main : theme.border.main}`
+                            }}
+                            onClick={() => setCommandDetailId(command.id)}
+                          >
+                            <div className="flex-1">
+                              <div className="font-mono" style={{ color: theme.primary.main }}>
+                                {command.command}
+                              </div>
+                              <div className="text-sm" style={{ color: theme.text.secondary }}>
+                                {command.description}
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center space-x-2">
+                              <button
+                                className="p-1 rounded"
+                                style={{ color: favorites.includes(command.id) ? theme.primary.main : theme.text.secondary }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavorite(command.id);
+                                }}
+                              >
+                                <Star size={16} fill={favorites.includes(command.id) ? theme.primary.main : 'none'} />
+                              </button>
+                              
+                              <button
+                                className="p-1 rounded"
+                                style={{ color: theme.text.secondary }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyCommand(command.command, command.id);
+                                }}
+                              >
+                                <Copy size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
                 
