@@ -58,15 +58,94 @@ const GitDashboardPro = () => {
   const [customCommands, setCustomCommands] = useLocalStorage('customCommands', []);
   const [commandHistory, setCommandHistory] = useLocalStorage('commandHistory', []);
   const [showOnboarding, setShowOnboarding] = useLocalStorage('showOnboarding', true);
+  const [userPreferences, setUserPreferences] = useLocalStorage('userPreferences', {
+    fontSize: 'medium',
+    codeColorization: true,
+    showDescriptions: true,
+    showExamples: true,
+    tutorialMode: false,
+    terminalPreferences: {
+      fontFamily: 'Menlo, monospace',
+      showLineNumbers: true,
+      darkTheme: true
+    }
+  });
 
-  // ... Rest of your component code ...
+  // UI state
+  const [loading, setLoading] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
+  const [terminalInput, setTerminalInput] = useState('');
+  const [terminalHistory, setTerminalHistory] = useState([
+    { type: 'system', content: 'Git Terminal Simulator v2.0' },
+    { type: 'system', content: 'Type "help" for available commands' }
+  ]);
+  const terminalRef = useRef(null);
+  const searchRef = useRef(null);
 
+  // Effect for theme changes
+  useEffect(() => {
+    setTheme(themes[themeId]);
+    document.documentElement.style.setProperty('--color-primary', themes[themeId].primary.main);
+    document.documentElement.style.setProperty('--color-background', themes[themeId].background.default);
+    document.documentElement.style.setProperty('--color-text', themes[themeId].text.primary);
+  }, [themeId]);
+
+  // Effect for initialization and resize handling
+  useEffect(() => {
+    const loadDashboard = async () => {
+      setLoading(true);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setLoading(false);
+      setInitializing(false);
+    };
+
+    const handleResize = () => {
+      if (window.innerWidth < 640) {
+        setDeviceSize('mobile');
+        setSidebarOpen(false);
+      } else if (window.innerWidth < 1024) {
+        setDeviceSize('tablet');
+      } else {
+        setDeviceSize('desktop');
+      }
+    };
+
+    loadDashboard();
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [setSidebarOpen]);
+
+  // Loading screen
+  if (loading || initializing) {
+    return (
+      <div 
+        className="flex flex-col items-center justify-center h-screen"
+        style={{ backgroundColor: theme.background.default }}
+      >
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+        >
+          <RefreshCw size={48} style={{ color: theme.primary.main }} />
+        </motion.div>
+        <h1 className="mt-4 text-xl font-semibold" style={{ color: theme.text.primary }}>
+          Loading Git Dashboard Pro...
+        </h1>
+      </div>
+    );
+  }
+
+  // Main render
   return (
     <div 
       className="flex flex-col h-screen"
       style={{ backgroundColor: theme.background.default }}
     >
-      {/* Your JSX code here */}
+      {/* Add your main content JSX here */}
+      <main className="flex-1 overflow-hidden">
+        {/* Your dashboard content */}
+      </main>
     </div>
   );
 };
