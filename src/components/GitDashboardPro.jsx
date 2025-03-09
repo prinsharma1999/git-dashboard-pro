@@ -96,11 +96,13 @@ const AICommandGenerator = ({ theme, onCommandGenerated }) => {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [generatedCommand, setGeneratedCommand] = useState(null);
+  const [error, setError] = useState(null);
 
   const generateCommand = async () => {
     if (!prompt.trim()) return;
 
     setLoading(true);
+    setError(null);
     try {
       const completion = await openai.chat.completions.create({
         model: "qwen/qwq-32b:free",
@@ -129,13 +131,41 @@ const AICommandGenerator = ({ theme, onCommandGenerated }) => {
         }
       });
 
-      const response = completion.choices[0].message.content;
-      const commandData = JSON.parse(response);
-      setGeneratedCommand(commandData);
-      onCommandGenerated(commandData);
+      try {
+        const response = completion.choices[0].message.content;
+        const commandData = JSON.parse(response);
+        
+        // Validate the response has the required fields
+        if (!commandData.command || !commandData.description || !commandData.explanation) {
+          throw new Error("Invalid response format");
+        }
+        
+        // Ensure tags is an array
+        if (!Array.isArray(commandData.tags)) {
+          commandData.tags = [];
+        }
+        
+        // Ensure examples is an array
+        if (!Array.isArray(commandData.examples)) {
+          commandData.examples = [];
+        }
+        
+        // Ensure safetyLevel is valid
+        if (!['safe', 'caution', 'dangerous'].includes(commandData.safetyLevel)) {
+          commandData.safetyLevel = 'safe';
+        }
+        
+        setGeneratedCommand(commandData);
+        onCommandGenerated(commandData);
+      } catch (parseError) {
+        console.error('Failed to parse AI response:', parseError);
+        setError('Failed to parse AI response. Please try again.');
+        toast.error('Failed to parse AI response. Please try again.');
+      }
     } catch (error) {
-      toast.error('Failed to generate command. Please try again.');
       console.error('AI Error:', error);
+      setError('Failed to generate command. Please try again.');
+      toast.error('Failed to generate command. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -199,6 +229,12 @@ const AICommandGenerator = ({ theme, onCommandGenerated }) => {
             </>
           )}
         </button>
+
+        {error && (
+          <div className="mt-2 p-3 rounded-lg bg-red-100 text-red-700 text-sm">
+            {error}
+          </div>
+        )}
 
         {generatedCommand && (
           <motion.div
@@ -786,7 +822,9 @@ const GitDashboardPro = () => {
   const [view, setView] = useLocalStorage('dashboardView', 'commands');
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [isLoadingAiSuggestions, setIsLoadingAiSuggestions] = useState(false);
-
+  const [showAiSuggestions, setShowAiSuggestions] = useState(true);
+  const [aiHistory, setAiHistory] = useState([]);
+  
   // Flattened tags for filtering
   const availableTags = tagCategories.flatMap(category => 
     category.tags.map(tag => ({
@@ -799,11 +837,15 @@ const GitDashboardPro = () => {
 
   // Get command by ID (including custom commands)
   const getCommandById = useCallback((id) => {
+    if (!id) return null;
+    
+    // Check in regular commands
     for (const category in commands) {
       const command = commands[category].find(c => c.id === id);
       if (command) return { ...command, category };
     }
     
+    // Check in custom commands
     const customCommand = customCommands.find(c => c.id === id);
     if (customCommand) return { ...customCommand, category: 'custom' };
     
@@ -824,8 +866,10 @@ const GitDashboardPro = () => {
     }
   }, [setRecentlyUsed]);
 
-  // Toggle favorite status for a command
+  // Toggle favorite status
   const toggleFavorite = useCallback((commandId) => {
+    if (!commandId) return;
+    
     if (favorites.includes(commandId)) {
       setFavorites(favorites.filter(id => id !== commandId));
       toast.success('Removed from favorites');
@@ -1027,6 +1071,21 @@ const GitDashboardPro = () => {
   // Filter commands based on search and tags
   const filteredCommands = () => {
     let result = {};
+    
+    // If viewing favorites, only show favorite commands
+    if (activeCategory === 'favorites') {
+      const favoriteCommands = favorites.map(id => getCommandById(id)).filter(Boolean);
+      
+      // Group by category
+      favoriteCommands.forEach(cmd => {
+        if (!result[cmd.category]) {
+          result[cmd.category] = [];
+        }
+        result[cmd.category].push(cmd);
+      });
+      
+      return result;
+    }
     
     Object.entries(commands).forEach(([category, categoryCommands]) => {
       const filtered = categoryCommands.filter(cmd => {
@@ -1309,7 +1368,7 @@ exit                   - Close terminal`
                       {example.description}
                     </div>
                     <div className="flex items-center justify-between">
-                      <code className="font-mono text-sm" style={{ color: theme.primary.main }}>
+                      <code className="font-mono" style={{ color: theme.primary.main }}>
                         {example.command}
                       </code>
                       <button
@@ -1456,267 +1515,220 @@ exit                   - Close terminal`
     }));
   };
 
-  // Add new state for AI-generated commands
-  const [showCommandGenerator, setShowCommandGenerator] = useState(false);
-
   // Handle AI-generated commands
   const handleCommandGenerated = (commandData) => {
-    const newCommand = {
-      id: `custom-${Date.now()}`,
-      command: commandData.command,
-      description: commandData.description,
-      longDescription: commandData.explanation,
-      tags: [...commandData.tags, commandData.safetyLevel],
-      examples: commandData.examples,
-      category: 'custom',
-      usage: 0,
-      lastUsed: null,
-      usageByWeekday: Array(7).fill(0),
-      usageByHour: Array(24).fill(0),
-      usageHistory: []
-    };
+    try {
+      const newCommand = {
+        id: `custom-${Date.now()}`,
+        command: commandData.command,
+        description: commandData.description,
+        longDescription: commandData.explanation,
+        tags: [...(commandData.tags || []), commandData.safetyLevel],
+        examples: commandData.examples || [],
+        category: 'custom',
+        usage: 0,
+        lastUsed: null,
+        usageByWeekday: Array(7).fill(0),
+        usageByHour: Array(24).fill(0),
+        usageHistory: []
+      };
 
-    setCustomCommands(prev => [...prev, newCommand]);
-    toast.success('Command added to your custom commands');
-    setActiveCategory('custom');
-    setShowCommandGenerator(false);
+      setCustomCommands(prev => [...prev, newCommand]);
+      setAiHistory(prev => [...prev, { timestamp: new Date(), prompt: commandData.prompt, command: newCommand }]);
+      toast.success('Command added to custom commands');
+      
+      // Switch to commands view and select the custom category
+      setView('commands');
+      setActiveCategory('custom');
+    } catch (error) {
+      console.error('Error handling generated command:', error);
+      toast.error('Failed to add command. Please try again.');
+    }
   };
 
   // Main render
   return (
     <div 
-      className="flex flex-col h-screen"
-      style={{ backgroundColor: theme.background.default }}
+      className="min-h-screen flex flex-col"
+      style={{ backgroundColor: theme.background.default, color: theme.text.primary }}
     >
-      <Toaster position="top-right" />
+      <Toaster position="bottom-right" />
       
-      {/* Header */}
-      <header 
-        className="flex items-center justify-between p-4 border-b"
-        style={{ 
-          backgroundColor: theme.background.paper,
-          borderColor: theme.border.light
-        }}
-      >
+      {/* Header with tabs */}
+      <div className="flex justify-between items-center p-4 border-b" style={{ borderColor: theme.border.main }}>
         <div className="flex items-center">
           <GitBranch size={24} className="mr-2" style={{ color: theme.primary.main }} />
           <h1 className="text-xl font-bold">Git Dashboard Pro</h1>
         </div>
-        <div className="flex items-center space-x-4">
-          <div className="flex space-x-2">
-            <button
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                view === 'commands' ? 'bg-opacity-20' : ''
-              }`}
-              style={{ 
-                backgroundColor: view === 'commands' ? theme.primary.main : 'transparent',
-                color: view === 'commands' ? theme.primary.contrast : theme.text.primary
-              }}
-              onClick={() => setView('commands')}
-            >
-              Commands
-            </button>
-            <button
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                view === 'learn' ? 'bg-opacity-20' : ''
-              }`}
-              style={{ 
-                backgroundColor: view === 'learn' ? theme.primary.main : 'transparent',
-                color: view === 'learn' ? theme.primary.contrast : theme.text.primary
-              }}
-              onClick={() => setView('learn')}
-            >
-              Learn
-            </button>
-            <button
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                view === 'ai' ? 'bg-opacity-20' : ''
-              }`}
-              style={{ 
-                backgroundColor: view === 'ai' ? theme.primary.main : 'transparent',
-                color: view === 'ai' ? theme.primary.contrast : theme.text.primary
-              }}
-              onClick={() => setView('ai')}
-            >
-              AI Assistant
-            </button>
-          </div>
-          
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search size={16} style={{ color: theme.text.hint }} />
-            </div>
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search commands (Ctrl/⌘ + K)..."
-              className="py-2 pl-10 pr-4 rounded-md w-64"
-              style={{ 
-                backgroundColor: theme.background.elevated,
-                color: theme.text.primary,
-                borderColor: theme.border.main
-              }}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <button 
-            className="p-2 rounded-full hover:bg-opacity-10"
+        
+        <div className="flex space-x-2">
+          <button
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              view === 'commands' ? 'bg-opacity-90' : 'bg-opacity-0'
+            }`}
             style={{ 
-              color: theme.text.primary,
-              backgroundColor: `${theme.background.elevated}30`
+              backgroundColor: view === 'commands' ? theme.primary.main : 'transparent',
+              color: view === 'commands' ? theme.primary.contrast : theme.text.primary
             }}
-            onClick={() => setShowFilters(!showFilters)}
+            onClick={() => setView('commands')}
           >
-            <Filter size={20} />
-          </button>
-          <button 
-            className="p-2 rounded-full hover:bg-opacity-10"
-            style={{ 
-              color: theme.text.primary,
-              backgroundColor: `${theme.background.elevated}30`
-            }}
-            onClick={() => setShowTerminal(!showTerminal)}
-          >
-            <Terminal size={20} />
-          </button>
-          <button 
-            className="p-2 rounded-full hover:bg-opacity-10"
-            style={{ 
-              color: theme.text.primary,
-              backgroundColor: `${theme.background.elevated}30`
-            }}
-            onClick={() => setThemeId(themeId === 'light' ? 'dark' : 'light')}
-          >
-            {themeId === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+            Commands
           </button>
           <button
-            className="p-2 rounded-lg transition-colors flex items-center space-x-2"
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              view === 'learn' ? 'bg-opacity-90' : 'bg-opacity-0'
+            }`}
             style={{ 
-              backgroundColor: theme.primary.main,
-              color: theme.primary.contrast
+              backgroundColor: view === 'learn' ? theme.primary.main : 'transparent',
+              color: view === 'learn' ? theme.primary.contrast : theme.text.primary
             }}
-            onClick={() => setShowCommandGenerator(true)}
+            onClick={() => setView('learn')}
           >
-            <Brain size={16} />
-            <span>Generate Command</span>
+            Learn
+          </button>
+          <button
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              view === 'ai' ? 'bg-opacity-90' : 'bg-opacity-0'
+            }`}
+            style={{ 
+              backgroundColor: view === 'ai' ? theme.primary.main : 'transparent',
+              color: view === 'ai' ? theme.primary.contrast : theme.text.primary
+            }}
+            onClick={() => setView('ai')}
+          >
+            AI Assistant
           </button>
         </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar */}
-        <div 
-          className="w-64 border-r flex-shrink-0 overflow-y-auto"
+        
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search size={16} style={{ color: theme.text.hint }} />
+          </div>
+          <input
+            ref={searchRef}
+            type="text"
+            placeholder="Search commands (Ctrl/⌘ + K)..."
+            className="py-2 pl-10 pr-4 rounded-md w-64"
+            style={{ 
+              backgroundColor: theme.background.elevated,
+              color: theme.text.primary,
+              borderColor: theme.border.main
+            }}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <button 
+          className="p-2 rounded-full hover:bg-opacity-10"
           style={{ 
-            backgroundColor: theme.background.paper,
-            borderColor: theme.border.light
+            color: theme.text.primary,
+            backgroundColor: `${theme.background.elevated}30`
           }}
+          onClick={() => setShowFilters(!showFilters)}
         >
-          {view === 'commands' ? (
-            <div className="p-4">
-              <div className="mb-4">
-                <h2 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
-                  Categories
-                </h2>
-                <div className="space-y-1">
+          <Filter size={20} />
+        </button>
+        <button 
+          className="p-2 rounded-full hover:bg-opacity-10"
+          style={{ 
+            color: theme.text.primary,
+            backgroundColor: `${theme.background.elevated}30`
+          }}
+          onClick={() => setShowTerminal(!showTerminal)}
+        >
+          <Terminal size={20} />
+        </button>
+        <button 
+          className="p-2 rounded-full hover:bg-opacity-10"
+          style={{ 
+            color: theme.text.primary,
+            backgroundColor: `${theme.background.elevated}30`
+          }}
+          onClick={() => setThemeId(themeId === 'light' ? 'dark' : 'light')}
+        >
+          {themeId === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+        </button>
+        <button
+          className="p-2 rounded-lg transition-colors flex items-center space-x-2"
+          style={{ 
+            backgroundColor: theme.primary.main,
+            color: theme.primary.contrast
+          }}
+          onClick={() => setShowCommandGenerator(true)}
+        >
+          <Brain size={16} />
+          <span>Generate Command</span>
+        </button>
+      </div>
+      
+      {/* Main content */}
+      <div className="flex-1 flex">
+        {/* Sidebar */}
+        {view === 'commands' && (
+          <div 
+            className="w-64 border-r p-4 flex flex-col"
+            style={{ borderColor: theme.border.main }}
+          >
+            {/* ... existing code ... */}
+            
+            {/* Categories */}
+            <div className="mt-4">
+              <h3 className="text-sm font-medium mb-2" style={{ color: theme.text.secondary }}>Categories</h3>
+              <ul className="space-y-1">
+                <li>
                   <button
-                    className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
-                      activeCategory === 'all' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center ${
+                      activeCategory === 'all' ? 'bg-opacity-10' : ''
                     }`}
                     style={{ 
                       backgroundColor: activeCategory === 'all' ? theme.primary.main : 'transparent',
-                      color: activeCategory === 'all' ? theme.primary.main : theme.text.primary,
-                      borderLeft: activeCategory === 'all' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                      color: activeCategory === 'all' ? theme.primary.main : theme.text.primary
                     }}
                     onClick={() => setActiveCategory('all')}
                   >
                     <span>All Commands</span>
                   </button>
-                  {Object.keys(commands).map(category => (
-                    <button
-                      key={category}
-                      className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
-                        activeCategory === category ? 'bg-opacity-10' : 'hover:bg-opacity-5'
-                      }`}
-                      style={{ 
-                        backgroundColor: activeCategory === category ? theme.primary.main : 'transparent',
-                        color: activeCategory === category ? theme.primary.main : theme.text.primary,
-                        borderLeft: activeCategory === category ? `3px solid ${theme.primary.main}` : '3px solid transparent'
-                      }}
-                      onClick={() => setActiveCategory(category)}
-                    >
-                      <span className="capitalize">{category}</span>
-                      <span 
-                        className="ml-auto px-2 py-0.5 rounded-full text-xs"
-                        style={{ 
-                          backgroundColor: theme.background.elevated,
-                          color: theme.text.secondary
-                        }}
-                      >
-                        {commands[category].length}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <h2 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
-                  Quick Access
-                </h2>
-                <div className="space-y-1">
+                </li>
+                <li>
                   <button
-                    className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
-                      activeCategory === 'favorites' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center ${
+                      activeCategory === 'favorites' ? 'bg-opacity-10' : ''
                     }`}
                     style={{ 
                       backgroundColor: activeCategory === 'favorites' ? theme.primary.main : 'transparent',
-                      color: activeCategory === 'favorites' ? theme.primary.main : theme.text.primary,
-                      borderLeft: activeCategory === 'favorites' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                      color: activeCategory === 'favorites' ? theme.primary.main : theme.text.primary
                     }}
                     onClick={() => setActiveCategory('favorites')}
                   >
-                    <Star size={16} className="mr-2" />
+                    <Star size={16} className="mr-2" style={{ color: theme.primary.main }} />
                     <span>Favorites</span>
                   </button>
-                  <button
-                    className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
-                      activeCategory === 'recent' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
-                    }`}
-                    style={{ 
-                      backgroundColor: activeCategory === 'recent' ? theme.primary.main : 'transparent',
-                      color: activeCategory === 'recent' ? theme.primary.main : theme.text.primary,
-                      borderLeft: activeCategory === 'recent' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
-                    }}
-                    onClick={() => setActiveCategory('recent')}
-                  >
-                    <Clock size={16} className="mr-2" />
-                    <span>Recently Used</span>
-                  </button>
-                  <button
-                    className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
-                      activeCategory === 'custom' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
-                    }`}
-                    style={{ 
-                      backgroundColor: activeCategory === 'custom' ? theme.primary.main : 'transparent',
-                      color: activeCategory === 'custom' ? theme.primary.main : theme.text.primary,
-                      borderLeft: activeCategory === 'custom' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
-                    }}
-                    onClick={() => setActiveCategory('custom')}
-                  >
-                    <Plus size={16} className="mr-2" />
-                    <span>Custom Commands</span>
-                  </button>
-                </div>
+                </li>
+                {/* ... rest of categories ... */}
+              </ul>
+            </div>
+            {/* ... existing code ... */}
+          </div>
+        )}
+        
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col">
+          {view === 'commands' ? (
+            <div className="flex-1 flex">
+              {/* Command list */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {/* ... existing code ... */}
               </div>
+              
+              {/* Right panel */}
+              <RightPanel command={commandDetailId ? getCommandById(commandDetailId) : null} />
             </div>
           ) : view === 'learn' ? (
-            <div className="p-4">
-              <AICommandGenerator 
+            <div className="flex-1 overflow-y-auto">
+              <LearningView 
                 theme={theme} 
-                onCommandGenerated={handleCommandGenerated}
+                progress={learningProgress}
+                onComplete={handleProgress}
               />
             </div>
           ) : (
@@ -1742,179 +1754,155 @@ exit                   - Close terminal`
                   <h3 className="text-xl font-bold mb-4" style={{ color: theme.text.primary }}>
                     Recent AI Interactions
                   </h3>
-                  {/* Add AI interaction history here */}
+                  {aiHistory.length > 0 ? (
+                    <div className="space-y-4">
+                      {aiHistory.map((item, index) => (
+                        <div 
+                          key={index}
+                          className="p-4 rounded-lg"
+                          style={{ backgroundColor: theme.background.elevated }}
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <p className="text-sm font-medium" style={{ color: theme.text.primary }}>
+                                {new Date(item.timestamp).toLocaleString()}
+                              </p>
+                              <p className="text-sm italic" style={{ color: theme.text.secondary }}>
+                                "{item.prompt}"
+                              </p>
+                            </div>
+                            <button
+                              className="p-2 rounded-lg"
+                              style={{ backgroundColor: theme.background.paper }}
+                              onClick={() => {
+                                setCommandDetailId(item.command.id);
+                                setView('commands');
+                              }}
+                            >
+                              <ExternalLink size={16} style={{ color: theme.primary.main }} />
+                            </button>
+                          </div>
+                          <div 
+                            className="p-2 rounded font-mono text-sm"
+                            style={{ backgroundColor: theme.background.paper }}
+                          >
+                            {item.command.command}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ color: theme.text.secondary }}>
+                      No AI interactions yet. Try generating a command above.
+                    </p>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Main Content Area */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {showCommandGenerator ? (
-            <div className="flex-1 overflow-y-auto p-4">
-              <AICommandGenerator 
-                theme={theme} 
-                onCommandGenerated={handleCommandGenerated}
-              />
-            </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto p-4">
-              {showFilters && (
-                <div 
-                  className="mb-4 p-4 rounded-lg border"
-                  style={{ 
-                    backgroundColor: theme.background.paper,
-                    borderColor: theme.border.light
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold" style={{ color: theme.text.primary }}>
-                      Filters
-                    </h3>
-                    <button
-                      className="text-sm"
-                      style={{ color: theme.text.secondary }}
-                      onClick={() => setFilterTags([])}
-                    >
-                      Clear All
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {availableTags.map(tag => (
-                      <button
-                        key={tag.id}
-                        className={`px-3 py-1 rounded-full text-sm flex items-center gap-1 ${
-                          filterTags.includes(tag.id) ? 'opacity-100' : 'opacity-70'
-                        }`}
-                        style={{ 
-                          backgroundColor: filterTags.includes(tag.id) ? tag.color : `${tag.color}40`,
-                          color: '#fff'
-                        }}
-                        onClick={() => {
-                          if (filterTags.includes(tag.id)) {
-                            setFilterTags(filterTags.filter(t => t !== tag.id));
-                          } else {
-                            setFilterTags([...filterTags, tag.id]);
-                          }
-                        }}
-                      >
-                        {tag.name}
-                        {filterTags.includes(tag.id) && <X size={14} />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Object.entries(filteredCommands()).map(([category, categoryCommands]) =>
-                  categoryCommands.map(command => (
-                    <CommandCard
-                      key={command.id}
-                      command={command}
-                      showCategory={activeCategory === 'all' || activeCategory === 'favorites' || activeCategory === 'recent'}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Right Panel */}
-          {rightPanelOpen && (
-            <div 
-              className="w-96 border-l flex-shrink-0"
-              style={{ 
-                backgroundColor: theme.background.paper,
-                borderColor: theme.border.light
-              }}
-            >
-              <RightPanel command={commandDetailId ? getCommandById(commandDetailId) : null} />
-            </div>
-          )}
-
-          {/* Terminal AI Suggestions */}
-          {isLoadingAiSuggestions && (
-            <div className="pl-3 text-yellow-400">
-              Getting AI suggestions...
-            </div>
-          )}
-          {aiSuggestions.length > 0 && (
-            <div className="pl-3 mt-2 border-l-2 border-blue-400">
-              <div className="text-blue-400 mb-1">AI Suggestions:</div>
-              {aiSuggestions.map((suggestion, idx) => (
-                <div key={idx} className="mb-2">
-                  <div className="text-green-400">{suggestion.command}</div>
-                  <div className="text-gray-400 text-sm">{suggestion.explanation}</div>
-                  <div className="text-gray-500 text-sm">Example: {suggestion.example}</div>
-                </div>
-              ))}
             </div>
           )}
         </div>
       </div>
-
+      
       {/* Terminal */}
       {showTerminal && (
         <div 
-          className="border-t"
+          className="border-t p-4"
           style={{ 
-            backgroundColor: theme.background.default,
-            borderColor: theme.border.light,
-            height: '300px'
+            borderColor: theme.border.main,
+            backgroundColor: theme.background.paper
           }}
         >
-          <div className="flex justify-between items-center px-4 py-2 border-b"
-            style={{ 
-              backgroundColor: theme.background.paper,
-              borderColor: theme.border.light
-            }}
-          >
-            <h3 style={{ color: theme.text.primary }}>Git Terminal</h3>
+          <div className="flex justify-between items-center mb-2">
+            <div className="flex items-center">
+              <Terminal size={16} className="mr-2" style={{ color: theme.primary.main }} />
+              <h3 className="text-sm font-medium" style={{ color: theme.text.primary }}>
+                Git Terminal Simulator
+              </h3>
+            </div>
             <button
-              className="hover:bg-opacity-10 p-1 rounded"
-              style={{ color: theme.text.secondary }}
+              className="p-1 rounded hover:bg-opacity-10"
+              style={{ 
+                color: theme.text.secondary,
+                backgroundColor: 'transparent',
+                hoverBackgroundColor: theme.primary.main
+              }}
               onClick={() => setShowTerminal(false)}
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
+          
           <div 
             ref={terminalRef}
-            className="h-[calc(300px-40px)] overflow-y-auto p-4 font-mono text-sm"
-            style={{ backgroundColor: '#1e1e1e', color: '#f0f0f0' }}
+            className="h-64 overflow-y-auto p-3 rounded font-mono text-sm mb-2"
+            style={{ 
+              backgroundColor: theme.background.elevated,
+              color: theme.text.primary
+            }}
           >
             {terminalHistory.map((entry, idx) => (
-              <div key={idx} className="mb-2">
+              <div key={idx} className="mb-1">
                 {entry.type === 'input' && (
                   <div className="flex">
-                    <span className="text-green-400 mr-1">$</span>
+                    <span style={{ color: theme.primary.main }}>$ </span>
                     <span>{entry.content}</span>
                   </div>
                 )}
                 {entry.type === 'output' && (
-                  <div className="whitespace-pre-wrap pl-3">{entry.content}</div>
+                  <div className="whitespace-pre-wrap pl-2">{entry.content}</div>
                 )}
                 {entry.type === 'error' && (
-                  <div className="text-red-400 pl-3">{entry.content}</div>
+                  <div className="whitespace-pre-wrap pl-2" style={{ color: theme.error.main }}>
+                    {entry.content}
+                  </div>
                 )}
                 {entry.type === 'system' && (
-                  <div className="text-blue-400">{entry.content}</div>
+                  <div className="whitespace-pre-wrap" style={{ color: theme.text.secondary }}>
+                    {entry.content}
+                  </div>
                 )}
               </div>
             ))}
-            <form onSubmit={handleTerminalCommand} className="flex">
-              <span className="text-green-400 mr-1">$</span>
+
+            {/* Terminal AI Suggestions */}
+            {isLoadingAiSuggestions && (
+              <div className="pl-3 text-yellow-400">
+                Getting AI suggestions...
+              </div>
+            )}
+            {showAiSuggestions && aiSuggestions.length > 0 && (
+              <div className="pl-3 mt-2 border-l-2 border-blue-400">
+                <div className="text-blue-400 mb-1">AI Suggestions:</div>
+                {aiSuggestions.map((suggestion, idx) => (
+                  <div key={idx} className="mb-2">
+                    <div className="text-green-400 cursor-pointer hover:underline" 
+                      onClick={() => {
+                        setTerminalInput(suggestion.command);
+                        setAiSuggestions([]);
+                      }}>
+                      {suggestion.command}
+                    </div>
+                    <div className="text-gray-400 text-sm">{suggestion.explanation}</div>
+                    <div className="text-gray-500 text-sm">Example: {suggestion.example}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <form onSubmit={handleTerminalCommand}>
+            <div className="flex">
+              <span className="mr-2 font-mono" style={{ color: theme.primary.main }}>$</span>
               <input
                 type="text"
-                className="flex-1 bg-transparent outline-none"
+                className="flex-1 bg-transparent outline-none font-mono"
+                style={{ color: theme.text.primary }}
                 value={terminalInput}
                 onChange={(e) => setTerminalInput(e.target.value)}
-                autoFocus
+                placeholder="Type a git command..."
               />
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
       )}
     </div>
