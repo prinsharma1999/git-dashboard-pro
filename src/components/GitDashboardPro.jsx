@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   GitBranch, Moon, Sun, Search, Star, Filter, Terminal, 
-  Copy, X, ChevronRight, ChevronLeft, Plus, Edit, Trash2, ChevronDown, ExternalLink, Clock, Book, Command, GitPullRequest, Brain, Trophy, Target, Lock, List, Grid
+  Copy, X, ChevronRight, ChevronLeft, Plus, Edit, Trash2, ChevronDown, ExternalLink, Clock, Book, Command, GitPullRequest, Brain, Trophy, Target, Lock, List, Grid, ExclamationCircle
 } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
 import { themes } from '../data/themes';
@@ -188,38 +188,69 @@ const AICommandGenerator = ({ theme, onCommandGenerated }) => {
         })
       });
       
+      if (!response.ok) {
+        throw new Error(`API responded with status: ${response.status}`);
+      }
+      
       const completion = await response.json();
       console.log("AI Response received:", completion);
+      
+      if (!completion || !completion.choices || !completion.choices[0] || !completion.choices[0].message) {
+        throw new Error("Invalid API response structure");
+      }
       
       try {
         const responseContent = completion.choices[0].message.content;
         console.log("Response content:", responseContent);
         
         // Try to extract JSON from the response
-        let commandData;
+        let commandData = null;
+        
+        // First, try direct parsing
         try {
           commandData = JSON.parse(responseContent);
+          console.log("Successfully parsed JSON directly");
         } catch (jsonError) {
           console.error("Initial JSON parse failed:", jsonError);
-          // Try to extract JSON from the response if it contains other text
-          const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            try {
+          
+          // Next, try to find a JSON object in the text
+          try {
+            const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
               commandData = JSON.parse(jsonMatch[0]);
-            } catch (nestedError) {
-              console.error("Nested JSON parse failed:", nestedError);
-              throw new Error("Could not parse JSON response");
+              console.log("Successfully extracted JSON from response text");
+            } else {
+              // If no JSON object found, try to create a simple command object from the text
+              const lines = responseContent.split('\n').filter(line => line.trim());
+              if (lines.length >= 2) {
+                commandData = {
+                  command: lines[0].replace(/^[`"']+|[`"']+$/g, ''),
+                  description: lines[1],
+                  explanation: lines.slice(2).join('\n'),
+                  tags: ["git"],
+                  safetyLevel: "safe",
+                  examples: []
+                };
+                console.log("Created command object from text:", commandData);
+              } else {
+                throw new Error("Could not extract command information from response");
+              }
             }
-          } else {
-            throw new Error("Could not extract JSON from response");
+          } catch (extractError) {
+            console.error("Failed to extract JSON:", extractError);
+            throw new Error("Could not parse response as a valid command");
           }
+        }
+        
+        if (!commandData) {
+          throw new Error("Failed to extract command data from response");
         }
         
         // Validate and sanitize the response
         if (!commandData.command) commandData.command = "git status";
         if (!commandData.description) commandData.description = "No description provided";
         if (!commandData.explanation) commandData.explanation = "No explanation provided";
-        if (!Array.isArray(commandData.tags)) commandData.tags = [];
+        if (!Array.isArray(commandData.tags)) commandData.tags = ["git"];
         if (!Array.isArray(commandData.examples)) commandData.examples = [];
         if (!['safe', 'caution', 'dangerous'].includes(commandData.safetyLevel)) {
           commandData.safetyLevel = 'safe';
@@ -233,8 +264,8 @@ const AICommandGenerator = ({ theme, onCommandGenerated }) => {
         onCommandGenerated(commandData);
       } catch (parseError) {
         console.error('Failed to parse AI response:', parseError);
-        setError('Failed to parse AI response. Please try again.');
-        toast.error('Failed to parse AI response. Please try again.');
+        setError(`Failed to parse AI response: ${parseError.message}`);
+        toast.error('Failed to parse AI response. Please try again with a clearer description.');
       }
     } catch (error) {
       console.error('AI Error:', error);
@@ -614,51 +645,71 @@ const LearningView = ({ theme, progress, onComplete }) => {
   const [selectedOption, setSelectedOption] = useState(null);
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [userLevel, setUserLevel] = useState(1);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     // Calculate user level based on points
-    const points = progress.points || 0;
-    setUserLevel(Math.floor(points / 30) + 1);
+    try {
+      const points = progress.points || 0;
+      setUserLevel(Math.floor(points / 30) + 1);
+    } catch (err) {
+      console.error("Error calculating user level:", err);
+      // Set a default level to prevent breaking
+      setUserLevel(1);
+    }
   }, [progress]);
 
   const handleLessonSelect = (lesson) => {
-    setActiveLesson(lesson);
-    setShowQuiz(false);
-    setSelectedOption(null);
-    setQuizSubmitted(false);
+    try {
+      setError(null);
+      setActiveLesson(lesson);
+      setShowQuiz(false);
+      setSelectedOption(null);
+      setQuizSubmitted(false);
+    } catch (err) {
+      console.error("Error selecting lesson:", err);
+      setError("Could not load lesson. Please try again.");
+    }
   };
 
   const handleLessonComplete = (lesson, correct = true) => {
-    let pointsChange = correct ? 1 : -0.25;
-    
-    // Bonus for hard lessons
-    if (lesson.isBonus) {
-      pointsChange = correct ? 3 : -0.5;
-    }
-    
-    // Apply difficulty multiplier
-    if (lesson.difficulty) {
-      pointsChange *= (1 + (lesson.difficulty - 1) * 0.2);
-    }
-    
-    const newPoints = Math.max(0, (progress.points || 0) + pointsChange);
-    
-    // Only mark as completed if not already completed
-    let completedLessons = [...progress.completedLessons];
-    if (!completedLessons.includes(lesson.id) && correct) {
-      completedLessons.push(lesson.id);
-    }
-    
-    onComplete({
-      completedLessons,
-      points: newPoints,
-      level: Math.floor(newPoints / 30) + 1
-    });
-    
-    if (correct) {
-      toast.success(`Correct! +${pointsChange.toFixed(1)} points`);
-    } else {
-      toast.error(`Incorrect. ${pointsChange.toFixed(1)} points`);
+    try {
+      let pointsChange = correct ? 1 : -0.25;
+      
+      // Bonus for hard lessons
+      if (lesson.isBonus) {
+        pointsChange = correct ? 3 : -0.5;
+      }
+      
+      // Apply difficulty multiplier
+      if (lesson.difficulty) {
+        pointsChange *= (1 + (lesson.difficulty - 1) * 0.2);
+      }
+      
+      // Handle the case where progress might be undefined
+      const currentProgress = progress || { completedLessons: [], points: 0 };
+      const newPoints = Math.max(0, (currentProgress.points || 0) + pointsChange);
+      
+      // Only mark as completed if not already completed
+      let completedLessons = [...(currentProgress.completedLessons || [])];
+      if (!completedLessons.includes(lesson.id) && correct) {
+        completedLessons.push(lesson.id);
+      }
+      
+      onComplete({
+        completedLessons,
+        points: newPoints,
+        level: Math.floor(newPoints / 30) + 1
+      });
+      
+      if (correct) {
+        toast.success(`Correct! +${pointsChange.toFixed(1)} points`);
+      } else {
+        toast.error(`Incorrect. ${pointsChange.toFixed(1)} points`);
+      }
+    } catch (err) {
+      console.error("Error completing lesson:", err);
+      toast.error("Couldn't update progress. Please try again.");
     }
   };
 
@@ -670,6 +721,7 @@ const LearningView = ({ theme, progress, onComplete }) => {
     } catch (error) {
       console.error("Error selecting option:", error);
       // Prevent blanking by handling errors
+      toast.error("Error selecting option. Please try again.");
     }
   };
 
@@ -678,6 +730,10 @@ const LearningView = ({ theme, progress, onComplete }) => {
       if (!selectedOption || quizSubmitted) return;
       
       setQuizSubmitted(true);
+      if (!activeLesson || !activeLesson.quiz || !activeLesson.quiz.answer) {
+        throw new Error("Quiz data is invalid");
+      }
+      
       const isCorrect = selectedOption === activeLesson.quiz.answer;
       handleLessonComplete(activeLesson, isCorrect);
     } catch (error) {
@@ -687,14 +743,49 @@ const LearningView = ({ theme, progress, onComplete }) => {
   };
 
   const isLessonCompleted = (lessonId) => {
-    return progress.completedLessons.includes(lessonId);
+    try {
+      if (!progress || !progress.completedLessons) return false;
+      return progress.completedLessons.includes(lessonId);
+    } catch (error) {
+      console.error("Error checking lesson completion:", error);
+      return false;
+    }
   };
 
   const getAvailablePaths = () => {
-    return Object.entries(learningPaths)
-      .filter(([_, pathData]) => pathData.level <= userLevel)
-      .map(([pathId, _]) => pathId);
+    try {
+      return Object.entries(learningPaths)
+        .filter(([_, pathData]) => pathData.level <= userLevel)
+        .map(([pathId, _]) => pathId);
+    } catch (error) {
+      console.error("Error getting available paths:", error);
+      return ['beginner']; // Fallback to beginner path
+    }
   };
+
+  // Add error display and fallback
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 p-6">
+        <div className="text-red-500 mb-4">
+          <ExclamationCircle size={48} />
+        </div>
+        <p className="text-lg mb-2" style={{ color: theme.error.main }}>
+          {error}
+        </p>
+        <button
+          className="px-4 py-2 mt-4 rounded-lg"
+          style={{ backgroundColor: theme.primary.main, color: theme.primary.contrast }}
+          onClick={() => {
+            setError(null);
+            setActiveLesson(null);
+          }}
+        >
+          Return to Lessons
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row h-full">
@@ -2009,30 +2100,70 @@ const GitDashboardPro = () => {
         })
       });
       
+      if (!response.ok) {
+        throw new Error(`API responded with status: ${response.status}`);
+      }
+      
       const completion = await response.json();
+      
+      if (!completion || !completion.choices || !completion.choices[0] || !completion.choices[0].message) {
+        throw new Error("Invalid API response structure");
+      }
 
       try {
         const responseContent = completion.choices[0].message.content;
         console.log("AI Suggestion response:", responseContent);
         
         let jsonResponse;
+        
+        // First try direct parsing
         try {
           jsonResponse = JSON.parse(responseContent);
         } catch (jsonError) {
           console.error("Initial JSON parse failed:", jsonError);
+          
           // Try to extract JSON from the response if it contains other text
           const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
-            jsonResponse = JSON.parse(jsonMatch[0]);
+            try {
+              jsonResponse = JSON.parse(jsonMatch[0]);
+            } catch (nestedError) {
+              console.error("Nested JSON parse failed:", nestedError);
+              // Create a simple suggestion from the text response
+              const lines = responseContent.split('\n').filter(line => line.trim());
+              if (lines.length > 1) {
+                jsonResponse = {
+                  suggestions: [{
+                    command: lines[0].replace(/^[`"']+|[`"']+$/g, ''),
+                    explanation: lines.slice(1).join('\n'),
+                    example: `${lines[0].replace(/^[`"']+|[`"']+$/g, '')}`
+                  }]
+                };
+              } else {
+                jsonResponse = { suggestions: [] };
+              }
+            }
           } else {
-            throw new Error("Could not extract JSON from response");
+            // Create a simple suggestion from the text response
+            jsonResponse = {
+              suggestions: [{
+                command: `git ${input}`,
+                explanation: responseContent,
+                example: `git ${input}`
+              }]
+            };
           }
         }
 
         setAiSuggestions(jsonResponse.suggestions || []);
       } catch (error) {
         console.error('Failed to parse AI suggestion response:', error);
-        setAiSuggestions([]);
+        // Create a fallback suggestion
+        setAiSuggestions([{
+          command: `git ${input}`,
+          explanation: "AI suggestion failed. This is a best guess based on your input.",
+          example: `git ${input}`
+        }]);
       }
     } catch (error) {
       console.error('AI Error:', error);
