@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   GitBranch, Moon, Sun, Search, Star, Filter, Terminal, 
-  Copy, X, ChevronRight, ChevronLeft, Plus, Edit, Trash2
+  Copy, X, ChevronRight, ChevronLeft, Plus, Edit, Trash2, ChevronDown, ExternalLink, Clock
 } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
 import { themes } from '../data/themes';
 import { tagCategories } from '../data/tagCategories';
+import { motion } from 'framer-motion';
 
 // Custom hooks
 const useLocalStorage = (key, initialValue) => {
@@ -34,80 +35,321 @@ const useLocalStorage = (key, initialValue) => {
 
 // Sample git commands data
 const gitCommandsData = {
+  setup: [
+    {
+      id: 'config-name',
+      command: 'git config --global user.name "[name]"',
+      description: 'Set the name you want attached to your commits',
+      longDescription: 'Sets the name that will be attached to your commits and tags. This should be your real name or a consistent pseudonym.',
+      tags: ['beginner', 'setup', 'configuration'],
+      examples: [
+        { description: 'Set your username', command: 'git config --global user.name "John Doe"' }
+      ],
+      category: 'setup'
+    },
+    {
+      id: 'config-email',
+      command: 'git config --global user.email "[email]"',
+      description: 'Set the email you want attached to your commits',
+      longDescription: 'Sets the email that will be attached to your commits. Should match your GitHub email for proper attribution.',
+      tags: ['beginner', 'setup', 'configuration'],
+      examples: [
+        { description: 'Set your email', command: 'git config --global user.email "john@example.com"' }
+      ],
+      category: 'setup'
+    }
+  ],
   basic: [
     {
       id: 'init',
       command: 'git init',
       description: 'Initialize a local Git repository',
+      longDescription: 'Creates a new Git repository in the current directory with a .git subdirectory.',
       tags: ['beginner', 'setup', 'local'],
+      examples: [
+        { description: 'Initialize in current directory', command: 'git init' },
+        { description: 'Initialize in specific directory', command: 'git init [directory]' }
+      ],
       category: 'basic'
     },
     {
       id: 'clone',
       command: 'git clone [url]',
       description: 'Clone a repository from a remote source',
-      tags: ['beginner', 'remote'],
+      longDescription: 'Creates a copy of a remote repository on your local machine.',
+      tags: ['beginner', 'setup', 'remote'],
+      examples: [
+        { description: 'Clone via HTTPS', command: 'git clone https://github.com/user/repo.git' },
+        { description: 'Clone via SSH', command: 'git clone git@github.com:user/repo.git' },
+        { description: 'Clone to specific directory', command: 'git clone [url] [directory]' }
+      ],
       category: 'basic'
-    },
+    }
+  ],
+  stage: [
     {
       id: 'add',
       command: 'git add [file]',
-      description: 'Add a file to the staging area',
-      tags: ['beginner', 'local'],
-      category: 'basic'
+      description: 'Add file(s) to staging area',
+      longDescription: 'Adds changes in specified files to the staging area for the next commit.',
+      tags: ['beginner', 'staging'],
+      examples: [
+        { description: 'Add specific file', command: 'git add file.txt' },
+        { description: 'Add all files', command: 'git add .' },
+        { description: 'Add all files with specific extension', command: 'git add *.js' }
+      ],
+      category: 'stage'
     },
+    {
+      id: 'reset',
+      command: 'git reset [file]',
+      description: 'Unstage file(s) while keeping changes',
+      longDescription: 'Removes files from the staging area but preserves their contents.',
+      tags: ['intermediate', 'staging', 'undo'],
+      examples: [
+        { description: 'Unstage specific file', command: 'git reset file.txt' },
+        { description: 'Unstage all files', command: 'git reset' }
+      ],
+      category: 'stage'
+    }
+  ],
+  commit: [
     {
       id: 'commit',
       command: 'git commit -m "[message]"',
-      description: 'Commit changes to the repository',
-      tags: ['beginner', 'local', 'commits'],
-      category: 'basic'
+      description: 'Commit staged changes with a message',
+      longDescription: 'Records changes to the repository with a descriptive message.',
+      tags: ['beginner', 'commit'],
+      examples: [
+        { description: 'Basic commit', command: 'git commit -m "Add feature"' },
+        { description: 'Commit with detailed message', command: 'git commit -m "Subject" -m "Description"' }
+      ],
+      category: 'commit'
+    },
+    {
+      id: 'commit-amend',
+      command: 'git commit --amend',
+      description: 'Modify the last commit',
+      longDescription: 'Updates the last commit with new changes or message.',
+      tags: ['intermediate', 'commit', 'modify'],
+      examples: [
+        { description: 'Change commit message', command: 'git commit --amend -m "New message"' },
+        { description: 'Add files to last commit', command: 'git commit --amend --no-edit' }
+      ],
+      category: 'commit'
     }
   ],
   branches: [
     {
-      id: 'branch',
+      id: 'branch-list',
       command: 'git branch',
-      description: 'List, create, or delete branches',
-      tags: ['beginner', 'branching'],
+      description: 'List all local branches',
+      longDescription: 'Shows all local branches, with * marking the current branch.',
+      tags: ['beginner', 'branch'],
+      examples: [
+        { description: 'List branches', command: 'git branch' },
+        { description: 'List remote branches', command: 'git branch -r' },
+        { description: 'List all branches', command: 'git branch -a' }
+      ],
       category: 'branches'
     },
     {
-      id: 'checkout',
-      command: 'git checkout [branch-name]',
-      description: 'Switch to a branch',
-      tags: ['beginner', 'branching'],
-      category: 'branches'
-    },
-    {
-      id: 'merge',
-      command: 'git merge [branch]',
-      description: 'Merge a branch into the active branch',
-      tags: ['intermediate', 'merging'],
+      id: 'branch-create',
+      command: 'git branch [name]',
+      description: 'Create a new branch',
+      longDescription: 'Creates a new branch at the current commit.',
+      tags: ['beginner', 'branch', 'create'],
+      examples: [
+        { description: 'Create branch', command: 'git branch feature' },
+        { description: 'Create and switch', command: 'git checkout -b feature' }
+      ],
       category: 'branches'
     }
   ],
   remote: [
     {
-      id: 'push',
-      command: 'git push origin [branch]',
-      description: 'Push changes to remote repository',
-      tags: ['beginner', 'remote'],
+      id: 'remote-add',
+      command: 'git remote add [name] [url]',
+      description: 'Add a remote repository',
+      longDescription: 'Creates a connection to a remote repository.',
+      tags: ['intermediate', 'remote', 'setup'],
+      examples: [
+        { description: 'Add origin', command: 'git remote add origin https://github.com/user/repo.git' },
+        { description: 'Add upstream', command: 'git remote add upstream https://github.com/original/repo.git' }
+      ],
       category: 'remote'
+    },
+    {
+      id: 'push',
+      command: 'git push [remote] [branch]',
+      description: 'Push commits to remote repository',
+      longDescription: 'Uploads local branch commits to the remote repository.',
+      tags: ['beginner', 'remote', 'sync'],
+      examples: [
+        { description: 'Push to origin', command: 'git push origin main' },
+        { description: 'Push all branches', command: 'git push --all origin' }
+      ],
+      category: 'remote'
+    }
+  ],
+  sync: [
+    {
+      id: 'fetch',
+      command: 'git fetch [remote]',
+      description: 'Download objects and refs from remote',
+      longDescription: 'Downloads all branches and tags from the remote without merging.',
+      tags: ['intermediate', 'remote', 'sync'],
+      examples: [
+        { description: 'Fetch from origin', command: 'git fetch origin' },
+        { description: 'Fetch all remotes', command: 'git fetch --all' }
+      ],
+      category: 'sync'
     },
     {
       id: 'pull',
-      command: 'git pull',
-      description: 'Pull changes from remote repository',
-      tags: ['beginner', 'remote'],
-      category: 'remote'
+      command: 'git pull [remote] [branch]',
+      description: 'Fetch and merge remote changes',
+      longDescription: 'Downloads and integrates changes from a remote repository.',
+      tags: ['beginner', 'remote', 'sync'],
+      examples: [
+        { description: 'Pull from origin', command: 'git pull origin main' },
+        { description: 'Pull with rebase', command: 'git pull --rebase origin main' }
+      ],
+      category: 'sync'
+    }
+  ],
+  history: [
+    {
+      id: 'log',
+      command: 'git log',
+      description: 'View commit history',
+      longDescription: 'Shows the commit history with details about each commit.',
+      tags: ['beginner', 'history', 'view'],
+      examples: [
+        { description: 'View basic log', command: 'git log' },
+        { description: 'View oneline format', command: 'git log --oneline' },
+        { description: 'View graph format', command: 'git log --graph --oneline --decorate' }
+      ],
+      category: 'history'
     },
     {
-      id: 'fetch',
-      command: 'git fetch',
-      description: 'Fetch changes from remote repository',
-      tags: ['beginner', 'remote'],
-      category: 'remote'
+      id: 'diff',
+      command: 'git diff',
+      description: 'Show changes between commits, commit and working tree, etc',
+      longDescription: 'Shows differences between various Git objects.',
+      tags: ['intermediate', 'history', 'view'],
+      examples: [
+        { description: 'View unstaged changes', command: 'git diff' },
+        { description: 'View staged changes', command: 'git diff --staged' },
+        { description: 'Compare branches', command: 'git diff branch1..branch2' }
+      ],
+      category: 'history'
+    }
+  ],
+  advanced: [
+    {
+      id: 'rebase',
+      command: 'git rebase [branch]',
+      description: 'Reapply commits on top of another base',
+      longDescription: 'Moves or combines a sequence of commits to a new base commit.',
+      tags: ['advanced', 'modify', 'history'],
+      examples: [
+        { description: 'Rebase onto main', command: 'git rebase main' },
+        { description: 'Interactive rebase', command: 'git rebase -i HEAD~3' }
+      ],
+      category: 'advanced'
+    },
+    {
+      id: 'cherry-pick',
+      command: 'git cherry-pick [commit]',
+      description: 'Apply the changes from specific commits',
+      longDescription: 'Applies the changes from specific commits to the current branch.',
+      tags: ['advanced', 'modify', 'commit'],
+      examples: [
+        { description: 'Cherry-pick commit', command: 'git cherry-pick abc123' },
+        { description: 'Cherry-pick range', command: 'git cherry-pick abc123..def456' }
+      ],
+      category: 'advanced'
+    }
+  ],
+  cleanup: [
+    {
+      id: 'clean',
+      command: 'git clean',
+      description: 'Remove untracked files from working directory',
+      longDescription: 'Removes untracked files from the working directory.',
+      tags: ['advanced', 'cleanup', 'remove'],
+      examples: [
+        { description: 'Dry run', command: 'git clean -n' },
+        { description: 'Remove files', command: 'git clean -f' },
+        { description: 'Remove files and directories', command: 'git clean -fd' }
+      ],
+      category: 'cleanup'
+    },
+    {
+      id: 'gc',
+      command: 'git gc',
+      description: 'Clean up unnecessary files and optimize local repository',
+      longDescription: 'Cleans up unnecessary files and optimizes the local repository.',
+      tags: ['advanced', 'cleanup', 'optimize'],
+      examples: [
+        { description: 'Basic cleanup', command: 'git gc' },
+        { description: 'Aggressive cleanup', command: 'git gc --aggressive' }
+      ],
+      category: 'cleanup'
+    }
+  ],
+  stash: [
+    {
+      id: 'stash-save',
+      command: 'git stash',
+      description: 'Temporarily store modified tracked files',
+      longDescription: 'Saves modified and staged changes for later use.',
+      tags: ['intermediate', 'stash', 'save'],
+      examples: [
+        { description: 'Basic stash', command: 'git stash' },
+        { description: 'Stash with message', command: 'git stash save "message"' },
+        { description: 'Stash untracked files', command: 'git stash -u' }
+      ],
+      category: 'stash'
+    },
+    {
+      id: 'stash-pop',
+      command: 'git stash pop',
+      description: 'Restore and remove stashed changes',
+      longDescription: 'Applies stashed changes and removes them from the stash.',
+      tags: ['intermediate', 'stash', 'apply'],
+      examples: [
+        { description: 'Pop latest stash', command: 'git stash pop' },
+        { description: 'Pop specific stash', command: 'git stash pop stash@{2}' }
+      ],
+      category: 'stash'
+    }
+  ],
+  tags: [
+    {
+      id: 'tag-create',
+      command: 'git tag [name]',
+      description: 'Create a tag',
+      longDescription: 'Creates a reference to a specific point in Git history.',
+      tags: ['intermediate', 'tag', 'release'],
+      examples: [
+        { description: 'Create lightweight tag', command: 'git tag v1.0.0' },
+        { description: 'Create annotated tag', command: 'git tag -a v1.0.0 -m "Version 1.0.0"' }
+      ],
+      category: 'tags'
+    },
+    {
+      id: 'tag-push',
+      command: 'git push [remote] [tag]',
+      description: 'Push tags to remote',
+      longDescription: 'Uploads tags to the remote repository.',
+      tags: ['intermediate', 'tag', 'remote'],
+      examples: [
+        { description: 'Push specific tag', command: 'git push origin v1.0.0' },
+        { description: 'Push all tags', command: 'git push origin --tags' }
+      ],
+      category: 'tags'
     }
   ]
 };
@@ -133,6 +375,9 @@ const GitDashboardPro = () => {
   const [isAddingCommand, setIsAddingCommand] = useState(false);
   const searchRef = useRef(null);
   const terminalRef = useRef(null);
+  const [commandDetailId, setCommandDetailId] = useState(null);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [rightPanelView, setRightPanelView] = useState('details');
 
   // Flattened tags for filtering
   const availableTags = tagCategories.flatMap(category => 
@@ -345,6 +590,235 @@ const GitDashboardPro = () => {
     }
   }, [commands, customCommands, favorites, setRecentlyUsed, terminalInput]);
 
+  // Right Panel Component
+  const RightPanel = ({ command }) => {
+    if (!command) return null;
+
+    return (
+      <div 
+        className="h-full overflow-y-auto"
+        style={{ backgroundColor: theme.background.paper }}
+      >
+        <div className="sticky top-0 z-10 p-4 border-b flex justify-between items-center"
+          style={{ 
+            backgroundColor: theme.background.paper,
+            borderColor: theme.border.light
+          }}
+        >
+          <h2 className="text-lg font-semibold" style={{ color: theme.text.primary }}>
+            Command Details
+          </h2>
+          <button
+            className="p-2 rounded hover:bg-opacity-10"
+            style={{ color: theme.text.secondary }}
+            onClick={() => setRightPanelOpen(false)}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-6">
+          {/* Command Header */}
+          <div>
+            <div className="flex items-center justify-between">
+              <span 
+                className="px-2 py-1 rounded text-sm"
+                style={{ 
+                  backgroundColor: theme.secondary.main,
+                  color: theme.secondary.contrast
+                }}
+              >
+                {command.category}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  className={`p-1 rounded hover:bg-opacity-10 ${
+                    favorites.includes(command.id) ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'
+                  }`}
+                  onClick={() => toggleFavorite(command.id)}
+                >
+                  <Star size={20} fill={favorites.includes(command.id) ? "currentColor" : "none"} />
+                </button>
+                <button
+                  className="p-1 rounded hover:bg-opacity-10"
+                  style={{ color: theme.text.secondary }}
+                  onClick={() => handleCopyCommand(command.command, command.id)}
+                >
+                  <Copy size={20} />
+                </button>
+              </div>
+            </div>
+            <h1 
+              className="font-mono text-xl font-bold mt-2" 
+              style={{ color: theme.primary.main }}
+            >
+              {command.command}
+            </h1>
+            <p className="mt-2" style={{ color: theme.text.secondary }}>
+              {command.description}
+            </p>
+          </div>
+
+          {/* Long Description */}
+          {command.longDescription && (
+            <div>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
+                Description
+              </h3>
+              <p className="text-sm" style={{ color: theme.text.secondary }}>
+                {command.longDescription}
+              </p>
+            </div>
+          )}
+
+          {/* Examples */}
+          {command.examples && command.examples.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
+                Examples
+              </h3>
+              <div className="space-y-3">
+                {command.examples.map((example, index) => (
+                  <div 
+                    key={index}
+                    className="p-3 rounded"
+                    style={{ backgroundColor: theme.background.elevated }}
+                  >
+                    <div className="mb-2 text-sm" style={{ color: theme.text.secondary }}>
+                      {example.description}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <code className="font-mono text-sm" style={{ color: theme.primary.main }}>
+                        {example.command}
+                      </code>
+                      <button
+                        className="p-1 rounded hover:bg-opacity-10"
+                        style={{ color: theme.text.secondary }}
+                        onClick={() => handleCopyCommand(example.command)}
+                      >
+                        <Copy size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Options */}
+          {command.options && command.options.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
+                Options
+              </h3>
+              <div className="space-y-2">
+                {command.options.map((option, index) => (
+                  <div 
+                    key={index}
+                    className="flex items-start p-2 rounded"
+                    style={{ backgroundColor: theme.background.elevated }}
+                  >
+                    <code 
+                      className="font-mono text-sm mr-3 whitespace-nowrap"
+                      style={{ color: theme.primary.main }}
+                    >
+                      {option.flag}
+                    </code>
+                    <span className="text-sm" style={{ color: theme.text.secondary }}>
+                      {option.description}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Related Commands */}
+          {command.relatedCommands && command.relatedCommands.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
+                Related Commands
+              </h3>
+              <div className="space-y-2">
+                {command.relatedCommands.map(cmdId => {
+                  const relatedCmd = getCommandById(cmdId);
+                  if (!relatedCmd) return null;
+                  return (
+                    <button
+                      key={cmdId}
+                      className="w-full text-left p-2 rounded hover:bg-opacity-10 flex items-center justify-between"
+                      style={{ 
+                        backgroundColor: theme.background.elevated,
+                        color: theme.text.secondary
+                      }}
+                      onClick={() => setCommandDetailId(cmdId)}
+                    >
+                      <span className="font-mono text-sm" style={{ color: theme.primary.main }}>
+                        {relatedCmd.command}
+                      </span>
+                      <ChevronRight size={16} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Usage Statistics */}
+          <div>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
+              Usage Statistics
+            </h3>
+            <div 
+              className="p-3 rounded space-y-2"
+              style={{ backgroundColor: theme.background.elevated }}
+            >
+              <div className="flex justify-between text-sm">
+                <span style={{ color: theme.text.secondary }}>Times Used:</span>
+                <span style={{ color: theme.text.primary }}>{command.usage || 0}</span>
+              </div>
+              {command.lastUsed && (
+                <div className="flex justify-between text-sm">
+                  <span style={{ color: theme.text.secondary }}>Last Used:</span>
+                  <span style={{ color: theme.text.primary }}>
+                    {new Date(command.lastUsed).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* External Links */}
+          {command.links && command.links.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
+                Learn More
+              </h3>
+              <div className="space-y-2">
+                {command.links.map((link, index) => (
+                  <a
+                    key={index}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block p-2 rounded text-sm hover:bg-opacity-10 flex items-center"
+                    style={{ 
+                      backgroundColor: theme.background.elevated,
+                      color: theme.primary.main
+                    }}
+                  >
+                    <ExternalLink size={16} className="mr-2" />
+                    {link.title}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Main render
   return (
     <div 
@@ -374,7 +848,7 @@ const GitDashboardPro = () => {
             <input
               ref={searchRef}
               type="text"
-              placeholder="Search commands..."
+              placeholder="Search commands (Ctrl/⌘ + K)..."
               className="py-2 pl-10 pr-4 rounded-md w-64"
               style={{ 
                 backgroundColor: theme.background.elevated,
@@ -418,283 +892,221 @@ const GitDashboardPro = () => {
         </div>
       </header>
 
-      {/* Categories selector */}
-      <div 
-        className="flex overflow-x-auto border-b p-2"
-        style={{ 
-          backgroundColor: theme.background.paper,
-          borderColor: theme.border.light
-        }}
-      >
-        <button
-          className={`px-4 py-2 rounded-md mr-2 whitespace-nowrap ${activeCategory === 'all' ? 'font-bold' : ''}`}
-          style={{ 
-            backgroundColor: activeCategory === 'all' ? theme.primary.main : 'transparent',
-            color: activeCategory === 'all' ? theme.primary.contrast : theme.text.primary
-          }}
-          onClick={() => setActiveCategory('all')}
-        >
-          All Commands
-        </button>
-        {Object.keys(commands).map(category => (
-          <button
-            key={category}
-            className={`px-4 py-2 rounded-md mr-2 whitespace-nowrap ${activeCategory === category ? 'font-bold' : ''}`}
-            style={{ 
-              backgroundColor: activeCategory === category ? theme.primary.main : 'transparent',
-              color: activeCategory === category ? theme.primary.contrast : theme.text.primary
-            }}
-            onClick={() => setActiveCategory(category)}
-          >
-            {category.charAt(0).toUpperCase() + category.slice(1)}
-          </button>
-        ))}
-        <button
-          className={`px-4 py-2 rounded-md mr-2 whitespace-nowrap ${activeCategory === 'favorites' ? 'font-bold' : ''}`}
-          style={{ 
-            backgroundColor: activeCategory === 'favorites' ? theme.primary.main : 'transparent',
-            color: activeCategory === 'favorites' ? theme.primary.contrast : theme.text.primary
-          }}
-          onClick={() => setActiveCategory('favorites')}
-        >
-          Favorites
-        </button>
-        <button
-          className={`px-4 py-2 rounded-md mr-2 whitespace-nowrap ${activeCategory === 'custom' ? 'font-bold' : ''}`}
-          style={{ 
-            backgroundColor: activeCategory === 'custom' ? theme.primary.main : 'transparent',
-            color: activeCategory === 'custom' ? theme.primary.contrast : theme.text.primary
-          }}
-          onClick={() => setActiveCategory('custom')}
-        >
-          Custom Commands
-        </button>
-      </div>
-
-      {/* Tag filters */}
-      {showFilters && (
+      {/* Main Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar */}
         <div 
-          className="flex flex-wrap p-3 border-b gap-2"
+          className="w-64 border-r flex-shrink-0 overflow-y-auto"
           style={{ 
             backgroundColor: theme.background.paper,
             borderColor: theme.border.light
           }}
         >
-          {availableTags.map(tag => (
-            <button
-              key={tag.id}
-              className={`px-3 py-1 rounded-full text-sm flex items-center ${
-                filterTags.includes(tag.id) ? 'opacity-100' : 'opacity-70'
-              }`}
-              style={{ 
-                backgroundColor: filterTags.includes(tag.id) ? tag.color : `${tag.color}40`,
-                color: '#fff'
-              }}
-              onClick={() => {
-                if (filterTags.includes(tag.id)) {
-                  setFilterTags(filterTags.filter(t => t !== tag.id));
-                } else {
-                  setFilterTags([...filterTags, tag.id]);
-                }
-              }}
-            >
-              {tag.name}
-              {filterTags.includes(tag.id) && <X size={14} className="ml-1" />}
-            </button>
-          ))}
-          {filterTags.length > 0 && (
-            <button
-              className="px-3 py-1 rounded-full text-sm"
-              style={{ color: theme.text.secondary }}
-              onClick={() => setFilterTags([])}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-      )}
+          <div className="p-4">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
+                Categories
+              </h2>
+              <div className="space-y-1">
+                <button
+                  className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                    activeCategory === 'all' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                  }`}
+                  style={{ 
+                    backgroundColor: activeCategory === 'all' ? theme.primary.main : 'transparent',
+                    color: activeCategory === 'all' ? theme.primary.main : theme.text.primary,
+                    borderLeft: activeCategory === 'all' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                  }}
+                  onClick={() => setActiveCategory('all')}
+                >
+                  <span>All Commands</span>
+                </button>
+                {Object.keys(commands).map(category => (
+                  <button
+                    key={category}
+                    className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                      activeCategory === category ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                    }`}
+                    style={{ 
+                      backgroundColor: activeCategory === category ? theme.primary.main : 'transparent',
+                      color: activeCategory === category ? theme.primary.main : theme.text.primary,
+                      borderLeft: activeCategory === category ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                    }}
+                    onClick={() => setActiveCategory(category)}
+                  >
+                    <span className="capitalize">{category}</span>
+                    <span 
+                      className="ml-auto px-2 py-0.5 rounded-full text-xs"
+                      style={{ 
+                        backgroundColor: theme.background.elevated,
+                        color: theme.text.secondary
+                      }}
+                    >
+                      {commands[category].length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-4">
-        {activeCategory === 'favorites' && favorites.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-64 p-8 text-center rounded-lg"
-            style={{ backgroundColor: theme.background.paper }}
-          >
-            <Star size={64} style={{ color: theme.text.hint }} />
-            <h3 className="mt-4 text-xl font-semibold" style={{ color: theme.text.primary }}>
-              No favorites yet
-            </h3>
-            <p className="mt-2" style={{ color: theme.text.secondary }}>
-              Click the star icon on any command to add it to your favorites.
-            </p>
-          </div>
-        )}
-        
-        {(activeCategory === 'favorites' && favorites.length > 0) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {favorites.map(id => {
-              // Find command in regular commands
-              let command = null;
-              let category = '';
-              
-              for (const cat in commands) {
-                const cmd = commands[cat].find(c => c.id === id);
-                if (cmd) {
-                  command = cmd;
-                  category = cat;
-                  break;
-                }
-              }
-              
-              // Check custom commands if not found
-              if (!command) {
-                const customCmd = customCommands.find(c => c.id === id);
-                if (customCmd) {
-                  command = customCmd;
-                  category = 'custom';
-                }
-              }
-              
-              if (!command) return null;
-              
-              return (
-                <div
-                  key={id}
-                  className="p-4 rounded-lg shadow-md"
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold mb-2" style={{ color: theme.text.primary }}>
+                Quick Access
+              </h2>
+              <div className="space-y-1">
+                <button
+                  className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                    activeCategory === 'favorites' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                  }`}
                   style={{ 
-                    backgroundColor: theme.background.paper,
-                    borderColor: theme.border.light
+                    backgroundColor: activeCategory === 'favorites' ? theme.primary.main : 'transparent',
+                    color: activeCategory === 'favorites' ? theme.primary.main : theme.text.primary,
+                    borderLeft: activeCategory === 'favorites' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
                   }}
+                  onClick={() => setActiveCategory('favorites')}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <span 
-                      className="px-2 py-1 rounded text-xs"
-                      style={{ 
-                        backgroundColor: theme.background.elevated,
-                        color: theme.text.secondary
-                      }}
-                    >
-                      {category.charAt(0).toUpperCase() + category.slice(1)}
-                    </span>
-                    <button
-                      className="text-yellow-400"
-                      onClick={() => toggleFavorite(id)}
-                    >
-                      <Star size={16} fill="currentColor" />
-                    </button>
-                  </div>
-                  <div className="font-mono mb-2" style={{ color: theme.primary.main }}>
-                    {command.command}
-                  </div>
-                  <div className="mb-3" style={{ color: theme.text.secondary }}>
-                    {command.description}
-                  </div>
-                  <div className="flex justify-end">
-                    <button
-                      className="px-3 py-1 rounded text-sm flex items-center"
-                      style={{ 
-                        backgroundColor: theme.primary.main,
-                        color: theme.primary.contrast
-                      }}
-                      onClick={() => handleCopyCommand(command.command, command.id)}
-                    >
-                      <Copy size={14} className="mr-1" />
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              );
-            }).filter(Boolean)}
-          </div>
-        )}
-        
-        {activeCategory !== 'favorites' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.entries(filteredCommands()).map(([category, categoryCommands]) => (
-              categoryCommands.map(cmd => (
-                <div
-                  key={cmd.id}
-                  className="p-4 rounded-lg shadow-md"
+                  <Star size={16} className="mr-2" />
+                  <span>Favorites</span>
+                  <span 
+                    className="ml-auto px-2 py-0.5 rounded-full text-xs"
+                    style={{ 
+                      backgroundColor: theme.background.elevated,
+                      color: theme.text.secondary
+                    }}
+                  >
+                    {favorites.length}
+                  </span>
+                </button>
+                <button
+                  className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                    activeCategory === 'recent' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                  }`}
                   style={{ 
-                    backgroundColor: theme.background.paper,
-                    borderColor: theme.border.light
+                    backgroundColor: activeCategory === 'recent' ? theme.primary.main : 'transparent',
+                    color: activeCategory === 'recent' ? theme.primary.main : theme.text.primary,
+                    borderLeft: activeCategory === 'recent' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
                   }}
+                  onClick={() => setActiveCategory('recent')}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <span 
-                      className="px-2 py-1 rounded text-xs"
-                      style={{ 
-                        backgroundColor: theme.background.elevated,
-                        color: theme.text.secondary
-                      }}
-                    >
-                      {category.charAt(0).toUpperCase() + category.slice(1)}
-                    </span>
-                    <button
-                      className={favorites.includes(cmd.id) ? "text-yellow-400" : "text-gray-400 hover:text-yellow-400"}
-                      onClick={() => toggleFavorite(cmd.id)}
-                    >
-                      <Star size={16} fill={favorites.includes(cmd.id) ? "currentColor" : "none"} />
-                    </button>
-                  </div>
-                  <div className="font-mono mb-2" style={{ color: theme.primary.main }}>
-                    {cmd.command}
-                  </div>
-                  <div className="mb-3" style={{ color: theme.text.secondary }}>
-                    {cmd.description}
-                  </div>
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {cmd.tags && cmd.tags.map(tagId => {
-                      const tag = availableTags.find(t => t.id === tagId);
-                      if (!tag) return null;
-                      return (
-                        <span
-                          key={tagId}
-                          className="px-2 py-0.5 rounded-full text-xs"
-                          style={{ 
-                            backgroundColor: `${tag.color}30`,
-                            color: tag.color
-                          }}
-                        >
-                          {tag.name}
-                        </span>
-                      );
-                    })}
-                  </div>
-                  <div className="flex justify-end">
-                    <button
-                      className="px-3 py-1 rounded text-sm flex items-center"
-                      style={{ 
-                        backgroundColor: theme.primary.main,
-                        color: theme.primary.contrast
-                      }}
-                      onClick={() => handleCopyCommand(cmd.command, cmd.id)}
-                    >
-                      <Copy size={14} className="mr-1" />
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              ))
-            ))}
-            
-            {activeCategory === 'custom' && (
+                  <Clock size={16} className="mr-2" />
+                  <span>Recently Used</span>
+                  <span 
+                    className="ml-auto px-2 py-0.5 rounded-full text-xs"
+                    style={{ 
+                      backgroundColor: theme.background.elevated,
+                      color: theme.text.secondary
+                    }}
+                  >
+                    {recentlyUsed.length}
+                  </span>
+                </button>
+                <button
+                  className={`w-full flex items-center rounded-lg px-3 py-2 transition-colors ${
+                    activeCategory === 'custom' ? 'bg-opacity-10' : 'hover:bg-opacity-5'
+                  }`}
+                  style={{ 
+                    backgroundColor: activeCategory === 'custom' ? theme.primary.main : 'transparent',
+                    color: activeCategory === 'custom' ? theme.primary.main : theme.text.primary,
+                    borderLeft: activeCategory === 'custom' ? `3px solid ${theme.primary.main}` : '3px solid transparent'
+                  }}
+                  onClick={() => setActiveCategory('custom')}
+                >
+                  <Plus size={16} className="mr-2" />
+                  <span>Custom Commands</span>
+                  <span 
+                    className="ml-auto px-2 py-0.5 rounded-full text-xs"
+                    style={{ 
+                      backgroundColor: theme.background.elevated,
+                      color: theme.text.secondary
+                    }}
+                  >
+                    {customCommands.length}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-hidden flex">
+          {/* Command List */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {showFilters && (
               <div 
-                className="flex flex-col items-center justify-center h-64 p-4 rounded-lg border-2 border-dashed cursor-pointer"
+                className="mb-4 p-4 rounded-lg border"
                 style={{ 
-                  borderColor: theme.border.light,
-                  color: theme.text.secondary
+                  backgroundColor: theme.background.paper,
+                  borderColor: theme.border.light
                 }}
-                onClick={() => setIsAddingCommand(true)}
               >
-                <Plus size={48} />
-                <p className="mt-2 text-center">Add Custom Command</p>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold" style={{ color: theme.text.primary }}>
+                    Filters
+                  </h3>
+                  <button
+                    className="text-sm"
+                    style={{ color: theme.text.secondary }}
+                    onClick={() => setFilterTags([])}
+                  >
+                    Clear All
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {availableTags.map(tag => (
+                    <button
+                      key={tag.id}
+                      className={`px-3 py-1 rounded-full text-sm flex items-center gap-1 ${
+                        filterTags.includes(tag.id) ? 'opacity-100' : 'opacity-70'
+                      }`}
+                      style={{ 
+                        backgroundColor: filterTags.includes(tag.id) ? tag.color : `${tag.color}40`,
+                        color: '#fff'
+                      }}
+                      onClick={() => {
+                        if (filterTags.includes(tag.id)) {
+                          setFilterTags(filterTags.filter(t => t !== tag.id));
+                        } else {
+                          setFilterTags([...filterTags, tag.id]);
+                        }
+                      }}
+                    >
+                      {tag.name}
+                      {filterTags.includes(tag.id) && <X size={14} />}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(filteredCommands()).map(([category, categoryCommands]) =>
+                categoryCommands.map(command => (
+                  <CommandCard
+                    key={command.id}
+                    command={command}
+                    showCategory={activeCategory === 'all' || activeCategory === 'favorites' || activeCategory === 'recent'}
+                  />
+                ))
+              )}
+            </div>
           </div>
-        )}
-      </main>
-      
+
+          {/* Right Panel */}
+          {rightPanelOpen && (
+            <div 
+              className="w-96 border-l flex-shrink-0"
+              style={{ 
+                backgroundColor: theme.background.paper,
+                borderColor: theme.border.light
+              }}
+            >
+              <RightPanel command={commandDetailId ? getCommandById(commandDetailId) : null} />
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Terminal */}
       {showTerminal && (
         <div 
@@ -754,83 +1166,6 @@ const GitDashboardPro = () => {
                 autoFocus
               />
             </form>
-          </div>
-        </div>
-      )}
-      
-      {/* Simplified Add Command Modal */}
-      {isAddingCommand && (
-        <div 
-          className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
-        >
-          <div 
-            className="w-full max-w-md p-6 rounded-lg"
-            style={{ backgroundColor: theme.background.paper }}
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold" style={{ color: theme.text.primary }}>Add Custom Command</h3>
-              <button
-                className="hover:bg-opacity-10 p-1 rounded"
-                style={{ color: theme.text.secondary }}
-                onClick={() => setIsAddingCommand(false)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block mb-1" style={{ color: theme.text.secondary }}>Command</label>
-                <input
-                  type="text"
-                  className="w-full p-2 rounded"
-                  style={{ 
-                    backgroundColor: theme.background.elevated,
-                    color: theme.text.primary,
-                    borderColor: theme.border.main
-                  }}
-                  placeholder="git example [options]"
-                />
-              </div>
-              <div>
-                <label className="block mb-1" style={{ color: theme.text.secondary }}>Description</label>
-                <input
-                  type="text"
-                  className="w-full p-2 rounded"
-                  style={{ 
-                    backgroundColor: theme.background.elevated,
-                    color: theme.text.primary,
-                    borderColor: theme.border.main
-                  }}
-                  placeholder="Short description of what the command does"
-                />
-              </div>
-              <div className="flex justify-end space-x-2 mt-6">
-                <button
-                  className="px-4 py-2 rounded"
-                  style={{ 
-                    backgroundColor: 'transparent',
-                    color: theme.text.secondary
-                  }}
-                  onClick={() => setIsAddingCommand(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="px-4 py-2 rounded"
-                  style={{ 
-                    backgroundColor: theme.primary.main,
-                    color: theme.primary.contrast
-                  }}
-                  onClick={() => {
-                    toast.success('Custom command added');
-                    setIsAddingCommand(false);
-                  }}
-                >
-                  Add Command
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
