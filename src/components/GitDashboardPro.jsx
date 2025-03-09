@@ -105,7 +105,7 @@ const AICommandGenerator = ({ theme, onCommandGenerated }) => {
     setError(null);
     try {
       const completion = await openai.chat.completions.create({
-        model: "qwen/qwq-32b:free",
+        model: "gpt-3.5-turbo", // Using a more reliable model
         messages: [
           {
             role: "system",
@@ -133,7 +133,21 @@ const AICommandGenerator = ({ theme, onCommandGenerated }) => {
 
       try {
         const response = completion.choices[0].message.content;
-        const commandData = JSON.parse(response);
+        console.log("AI Response:", response);
+        
+        // Handle potential non-JSON responses
+        let commandData;
+        try {
+          commandData = JSON.parse(response);
+        } catch (jsonError) {
+          // Try to extract JSON from the response if it contains other text
+          const jsonMatch = response.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            commandData = JSON.parse(jsonMatch[0]);
+          } else {
+            throw new Error("Could not parse JSON response");
+          }
+        }
         
         // Validate the response has the required fields
         if (!commandData.command || !commandData.description || !commandData.explanation) {
@@ -154,6 +168,9 @@ const AICommandGenerator = ({ theme, onCommandGenerated }) => {
         if (!['safe', 'caution', 'dangerous'].includes(commandData.safetyLevel)) {
           commandData.safetyLevel = 'safe';
         }
+        
+        // Add the prompt to the command data for history
+        commandData.prompt = prompt;
         
         setGeneratedCommand(commandData);
         onCommandGenerated(commandData);
@@ -1087,23 +1104,49 @@ const GitDashboardPro = () => {
       return result;
     }
     
+    // If viewing recent, only show recently used commands
+    if (activeCategory === 'recent') {
+      const recentCommands = recentlyUsed
+        .map(id => getCommandById(id))
+        .filter(Boolean);
+      
+      // Group by category
+      recentCommands.forEach(cmd => {
+        if (!result[cmd.category]) {
+          result[cmd.category] = [];
+        }
+        result[cmd.category].push(cmd);
+      });
+      
+      return result;
+    }
+    
+    // If viewing custom, only show custom commands
+    if (activeCategory === 'custom') {
+      return { custom: customCommands };
+    }
+    
+    // If viewing a specific category, only show commands from that category
+    if (activeCategory !== 'all') {
+      return { [activeCategory]: commands[activeCategory] || [] };
+    }
+    
+    // If viewing all, filter by search and tags
     Object.entries(commands).forEach(([category, categoryCommands]) => {
-      const filtered = categoryCommands.filter(cmd => {
-        // Skip if not in active category (unless searching or viewing all)
-        if (!searchTerm && activeCategory !== 'all' && category !== activeCategory) {
+      const filtered = categoryCommands.filter(command => {
+        // Filter by search
+        if (searchTerm && !command.command.toLowerCase().includes(searchTerm.toLowerCase()) && 
+            !command.description.toLowerCase().includes(searchTerm.toLowerCase())) {
           return false;
         }
         
-        // Apply search filter
-        const matchesSearch = !searchTerm || 
-          cmd.command.toLowerCase().includes(searchTerm.toLowerCase()) || 
-          cmd.description.toLowerCase().includes(searchTerm.toLowerCase());
+        // Filter by tags
+        if (filterTags.length > 0) {
+          const commandTags = command.tags || [];
+          return filterTags.some(tag => commandTags.includes(tag));
+        }
         
-        // Apply tag filter
-        const matchesTags = filterTags.length === 0 || 
-          filterTags.every(tag => cmd.tags && cmd.tags.includes(tag));
-        
-        return matchesSearch && matchesTags;
+        return true;
       });
       
       if (filtered.length > 0) {
@@ -1111,20 +1154,27 @@ const GitDashboardPro = () => {
       }
     });
     
-    // Add custom commands if they match
-    const filteredCustom = customCommands.filter(cmd => {
-      const matchesSearch = !searchTerm || 
-        cmd.command.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        cmd.description.toLowerCase().includes(searchTerm.toLowerCase());
+    // Add custom commands if viewing all
+    if (customCommands.length > 0) {
+      const filtered = customCommands.filter(command => {
+        // Filter by search
+        if (searchTerm && !command.command.toLowerCase().includes(searchTerm.toLowerCase()) && 
+            !command.description.toLowerCase().includes(searchTerm.toLowerCase())) {
+          return false;
+        }
+        
+        // Filter by tags
+        if (filterTags.length > 0) {
+          const commandTags = command.tags || [];
+          return filterTags.some(tag => commandTags.includes(tag));
+        }
+        
+        return true;
+      });
       
-      const matchesTags = filterTags.length === 0 || 
-        filterTags.every(tag => cmd.tags && cmd.tags.includes(tag));
-      
-      return matchesSearch && matchesTags;
-    });
-    
-    if (filteredCustom.length > 0 && (activeCategory === 'all' || activeCategory === 'custom')) {
-      result.custom = filteredCustom;
+      if (filtered.length > 0) {
+        result.custom = filtered;
+      }
     }
     
     return result;
@@ -1135,7 +1185,7 @@ const GitDashboardPro = () => {
     setIsLoadingAiSuggestions(true);
     try {
       const completion = await openai.chat.completions.create({
-        model: "qwen/qwq-32b:free",
+        model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
@@ -1518,12 +1568,16 @@ exit                   - Close terminal`
   // Handle AI-generated commands
   const handleCommandGenerated = (commandData) => {
     try {
+      if (!commandData || !commandData.command) {
+        throw new Error("Invalid command data");
+      }
+      
       const newCommand = {
         id: `custom-${Date.now()}`,
         command: commandData.command,
-        description: commandData.description,
-        longDescription: commandData.explanation,
-        tags: [...(commandData.tags || []), commandData.safetyLevel],
+        description: commandData.description || "No description provided",
+        longDescription: commandData.explanation || "No explanation provided",
+        tags: [...(commandData.tags || []), commandData.safetyLevel || "safe"],
         examples: commandData.examples || [],
         category: 'custom',
         usage: 0,
@@ -1534,12 +1588,22 @@ exit                   - Close terminal`
       };
 
       setCustomCommands(prev => [...prev, newCommand]);
-      setAiHistory(prev => [...prev, { timestamp: new Date(), prompt: commandData.prompt, command: newCommand }]);
+      
+      // Only add to history if prompt exists
+      if (commandData.prompt) {
+        setAiHistory(prev => [...prev, { 
+          timestamp: new Date(), 
+          prompt: commandData.prompt, 
+          command: newCommand 
+        }]);
+      }
+      
       toast.success('Command added to custom commands');
       
       // Switch to commands view and select the custom category
       setView('commands');
       setActiveCategory('custom');
+      setCommandDetailId(newCommand.id);
     } catch (error) {
       console.error('Error handling generated command:', error);
       toast.error('Failed to add command. Please try again.');
@@ -1563,9 +1627,7 @@ exit                   - Close terminal`
         
         <div className="flex space-x-2">
           <button
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              view === 'commands' ? 'bg-opacity-90' : 'bg-opacity-0'
-            }`}
+            className={`px-4 py-2 rounded-lg transition-colors`}
             style={{ 
               backgroundColor: view === 'commands' ? theme.primary.main : 'transparent',
               color: view === 'commands' ? theme.primary.contrast : theme.text.primary
@@ -1575,9 +1637,7 @@ exit                   - Close terminal`
             Commands
           </button>
           <button
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              view === 'learn' ? 'bg-opacity-90' : 'bg-opacity-0'
-            }`}
+            className={`px-4 py-2 rounded-lg transition-colors`}
             style={{ 
               backgroundColor: view === 'learn' ? theme.primary.main : 'transparent',
               color: view === 'learn' ? theme.primary.contrast : theme.text.primary
@@ -1587,9 +1647,7 @@ exit                   - Close terminal`
             Learn
           </button>
           <button
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              view === 'ai' ? 'bg-opacity-90' : 'bg-opacity-0'
-            }`}
+            className={`px-4 py-2 rounded-lg transition-colors`}
             style={{ 
               backgroundColor: view === 'ai' ? theme.primary.main : 'transparent',
               color: view === 'ai' ? theme.primary.contrast : theme.text.primary
@@ -1600,65 +1658,22 @@ exit                   - Close terminal`
           </button>
         </div>
         
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search size={16} style={{ color: theme.text.hint }} />
-          </div>
-          <input
-            ref={searchRef}
-            type="text"
-            placeholder="Search commands (Ctrl/⌘ + K)..."
-            className="py-2 pl-10 pr-4 rounded-md w-64"
-            style={{ 
-              backgroundColor: theme.background.elevated,
-              color: theme.text.primary,
-              borderColor: theme.border.main
-            }}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="flex items-center space-x-2">
+          <button
+            className="p-2 rounded-lg"
+            style={{ color: theme.text.secondary }}
+            onClick={() => setShowTerminal(prev => !prev)}
+          >
+            <Terminal size={20} />
+          </button>
+          <button
+            className="p-2 rounded-lg"
+            style={{ color: theme.text.secondary }}
+            onClick={() => setThemeId(themeId === 'dark' ? 'light' : 'dark')}
+          >
+            {themeId === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
         </div>
-        <button 
-          className="p-2 rounded-full hover:bg-opacity-10"
-          style={{ 
-            color: theme.text.primary,
-            backgroundColor: `${theme.background.elevated}30`
-          }}
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          <Filter size={20} />
-        </button>
-        <button 
-          className="p-2 rounded-full hover:bg-opacity-10"
-          style={{ 
-            color: theme.text.primary,
-            backgroundColor: `${theme.background.elevated}30`
-          }}
-          onClick={() => setShowTerminal(!showTerminal)}
-        >
-          <Terminal size={20} />
-        </button>
-        <button 
-          className="p-2 rounded-full hover:bg-opacity-10"
-          style={{ 
-            color: theme.text.primary,
-            backgroundColor: `${theme.background.elevated}30`
-          }}
-          onClick={() => setThemeId(themeId === 'light' ? 'dark' : 'light')}
-        >
-          {themeId === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-        </button>
-        <button
-          className="p-2 rounded-lg transition-colors flex items-center space-x-2"
-          style={{ 
-            backgroundColor: theme.primary.main,
-            color: theme.primary.contrast
-          }}
-          onClick={() => setView('ai')}
-        >
-          <Brain size={16} />
-          <span>Generate Command</span>
-        </button>
       </div>
       
       {/* Main content */}
@@ -1669,7 +1684,27 @@ exit                   - Close terminal`
             className="w-64 border-r p-4 flex flex-col"
             style={{ borderColor: theme.border.main }}
           >
-            {/* ... existing code ... */}
+            {/* Search */}
+            <div className="relative">
+              <input
+                ref={searchRef}
+                type="text"
+                className="w-full p-2 pl-8 rounded-lg"
+                style={{ 
+                  backgroundColor: theme.background.elevated,
+                  color: theme.text.primary,
+                  border: `1px solid ${theme.border.main}`
+                }}
+                placeholder="Search commands..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <Search 
+                size={16} 
+                className="absolute left-2.5 top-2.5" 
+                style={{ color: theme.text.secondary }} 
+              />
+            </div>
             
             {/* Categories */}
             <div className="mt-4">
@@ -1677,11 +1712,9 @@ exit                   - Close terminal`
               <ul className="space-y-1">
                 <li>
                   <button
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center ${
-                      activeCategory === 'all' ? 'bg-opacity-10' : ''
-                    }`}
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center`}
                     style={{ 
-                      backgroundColor: activeCategory === 'all' ? theme.primary.main : 'transparent',
+                      backgroundColor: activeCategory === 'all' ? `${theme.primary.main}20` : 'transparent',
                       color: activeCategory === 'all' ? theme.primary.main : theme.text.primary
                     }}
                     onClick={() => setActiveCategory('all')}
@@ -1691,11 +1724,9 @@ exit                   - Close terminal`
                 </li>
                 <li>
                   <button
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center ${
-                      activeCategory === 'favorites' ? 'bg-opacity-10' : ''
-                    }`}
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center`}
                     style={{ 
-                      backgroundColor: activeCategory === 'favorites' ? theme.primary.main : 'transparent',
+                      backgroundColor: activeCategory === 'favorites' ? `${theme.primary.main}20` : 'transparent',
                       color: activeCategory === 'favorites' ? theme.primary.main : theme.text.primary
                     }}
                     onClick={() => setActiveCategory('favorites')}
@@ -1704,10 +1735,89 @@ exit                   - Close terminal`
                     <span>Favorites</span>
                   </button>
                 </li>
-                {/* ... rest of categories ... */}
+                <li>
+                  <button
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center`}
+                    style={{ 
+                      backgroundColor: activeCategory === 'recent' ? `${theme.primary.main}20` : 'transparent',
+                      color: activeCategory === 'recent' ? theme.primary.main : theme.text.primary
+                    }}
+                    onClick={() => setActiveCategory('recent')}
+                  >
+                    <Clock size={16} className="mr-2" style={{ color: theme.primary.main }} />
+                    <span>Recently Used</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center`}
+                    style={{ 
+                      backgroundColor: activeCategory === 'custom' ? `${theme.primary.main}20` : 'transparent',
+                      color: activeCategory === 'custom' ? theme.primary.main : theme.text.primary
+                    }}
+                    onClick={() => setActiveCategory('custom')}
+                  >
+                    <Plus size={16} className="mr-2" style={{ color: theme.primary.main }} />
+                    <span>Custom Commands</span>
+                    <span className="ml-auto bg-opacity-20 px-2 py-0.5 rounded text-xs" style={{ backgroundColor: theme.primary.main }}>
+                      {customCommands.length}
+                    </span>
+                  </button>
+                </li>
+                {Object.keys(commands).map(category => (
+                  <li key={category}>
+                    <button
+                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center`}
+                      style={{ 
+                        backgroundColor: activeCategory === category ? `${theme.primary.main}20` : 'transparent',
+                        color: activeCategory === category ? theme.primary.main : theme.text.primary
+                      }}
+                      onClick={() => setActiveCategory(category)}
+                    >
+                      <span className="capitalize">{category}</span>
+                      <span className="ml-auto bg-opacity-20 px-2 py-0.5 rounded text-xs" style={{ backgroundColor: theme.primary.main }}>
+                        {commands[category].length}
+                      </span>
+                    </button>
+                  </li>
+                ))}
               </ul>
             </div>
-            {/* ... existing code ... */}
+            
+            {/* Tags */}
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium" style={{ color: theme.text.secondary }}>Filter by Tags</h3>
+                <button
+                  className="text-xs"
+                  style={{ color: theme.primary.main }}
+                  onClick={() => setFilterTags([])}
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {Object.entries(tagCategories).map(([tagId, tag]) => (
+                  <button
+                    key={tagId}
+                    className={`px-2 py-1 rounded-full text-xs transition-colors`}
+                    style={{ 
+                      backgroundColor: filterTags.includes(tagId) ? tag.color : `${tag.color}30`,
+                      color: filterTags.includes(tagId) ? '#fff' : theme.text.primary
+                    }}
+                    onClick={() => {
+                      if (filterTags.includes(tagId)) {
+                        setFilterTags(filterTags.filter(t => t !== tagId));
+                      } else {
+                        setFilterTags([...filterTags, tagId]);
+                      }
+                    }}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
         
@@ -1717,7 +1827,34 @@ exit                   - Close terminal`
             <div className="flex-1 flex">
               {/* Command list */}
               <div className="flex-1 overflow-y-auto p-4">
-                {/* ... existing code ... */}
+                {Object.entries(filteredCommands()).map(([category, categoryCommands]) => (
+                  <div key={category} className="mb-6">
+                    <h2 className="text-lg font-semibold mb-3 capitalize" style={{ color: theme.text.primary }}>
+                      {category}
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {categoryCommands.map(command => (
+                        <CommandCard
+                          key={command.id}
+                          command={command}
+                          showCategory={activeCategory === 'all' || activeCategory === 'favorites' || activeCategory === 'recent'}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                
+                {Object.keys(filteredCommands()).length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-64">
+                    <Search size={48} style={{ color: theme.text.secondary, opacity: 0.5 }} />
+                    <p className="mt-4 text-lg" style={{ color: theme.text.secondary }}>
+                      No commands found
+                    </p>
+                    <p style={{ color: theme.text.secondary }}>
+                      Try adjusting your search or filters
+                    </p>
+                  </div>
+                )}
               </div>
               
               {/* Right panel */}
@@ -1754,7 +1891,7 @@ exit                   - Close terminal`
                   <h3 className="text-xl font-bold mb-4" style={{ color: theme.text.primary }}>
                     Recent AI Interactions
                   </h3>
-                  {aiHistory.length > 0 ? (
+                  {aiHistory && aiHistory.length > 0 ? (
                     <div className="space-y-4">
                       {aiHistory.map((item, index) => (
                         <div 
