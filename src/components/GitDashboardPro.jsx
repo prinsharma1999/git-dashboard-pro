@@ -2535,6 +2535,64 @@ const GitDashboardPro = () => {
     toast.success('Command saved successfully!');
   };
 
+  // Function to get related commands
+  const getRelatedCommands = useCallback((command) => {
+    if (!command) return [];
+    
+    // Get the command category
+    const cmdCategory = command.category;
+    
+    // Get all commands from the same category
+    const categoryCommands = cmdCategory === 'custom' 
+      ? customCommands 
+      : commands[cmdCategory] || [];
+    
+    // Find similar commands based on tags
+    const similarCommands = [];
+    
+    // First, try to find commands with matching tags
+    if (command.tags && command.tags.length > 0) {
+      const commandsWithMatchingTags = Object.values(commands)
+        .flat()
+        .concat(customCommands)
+        .filter(cmd => 
+          cmd.id !== command.id && 
+          cmd.tags && 
+          command.tags.some(tag => cmd.tags.includes(tag))
+        );
+      
+      similarCommands.push(...commandsWithMatchingTags.slice(0, 3));
+    }
+    
+    // If we don't have enough similar commands by tags, add some from the same category
+    if (similarCommands.length < 3) {
+      const remainingCommands = categoryCommands
+        .filter(cmd => 
+          cmd.id !== command.id && 
+          !similarCommands.some(similar => similar.id === cmd.id)
+        );
+      
+      similarCommands.push(...remainingCommands.slice(0, 3 - similarCommands.length));
+    }
+    
+    // If we still don't have enough, add some random commands
+    if (similarCommands.length < 3) {
+      const allCommands = Object.values(commands)
+        .flat()
+        .concat(customCommands)
+        .filter(cmd => 
+          cmd.id !== command.id && 
+          !similarCommands.some(similar => similar.id === cmd.id)
+        );
+      
+      // Shuffle the array to get random commands
+      const shuffled = [...allCommands].sort(() => 0.5 - Math.random());
+      similarCommands.push(...shuffled.slice(0, 3 - similarCommands.length));
+    }
+    
+    return similarCommands;
+  }, [commands, customCommands]);
+
   // Main render
   return (
     <div 
