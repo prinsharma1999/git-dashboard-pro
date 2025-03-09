@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/git-dashboard-pro/static/css/main.02438d34.css",
-    "main.js": "/git-dashboard-pro/static/js/main.f513359b.js",
+    "main.css": "/git-dashboard-pro/static/css/main.356ec33f.css",
+    "main.js": "/git-dashboard-pro/static/js/main.7f2bdd45.js",
     "static/js/453.72333876.chunk.js": "/git-dashboard-pro/static/js/453.72333876.chunk.js",
     "index.html": "/git-dashboard-pro/index.html",
-    "main.02438d34.css.map": "/git-dashboard-pro/static/css/main.02438d34.css.map",
-    "main.f513359b.js.map": "/git-dashboard-pro/static/js/main.f513359b.js.map",
+    "main.356ec33f.css.map": "/git-dashboard-pro/static/css/main.356ec33f.css.map",
+    "main.7f2bdd45.js.map": "/git-dashboard-pro/static/js/main.7f2bdd45.js.map",
     "453.72333876.chunk.js.map": "/git-dashboard-pro/static/js/453.72333876.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.02438d34.css",
-    "static/js/main.f513359b.js"
+    "static/css/main.356ec33f.css",
+    "static/js/main.7f2bdd45.js"
   ]
 }
