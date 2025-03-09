@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   GitBranch, Moon, Sun, Search, Star, Filter, Terminal, 
-  Copy, X, ChevronRight, ChevronLeft, Plus, Edit, Trash2, ChevronDown, ExternalLink, Clock, Book, Command, GitPullRequest, Brain, Trophy, Target, Lock, List, Grid, ExclamationCircle
+  Copy, X, ChevronRight, ChevronLeft, Plus, Edit, Trash2, ChevronDown, ExternalLink, Clock, Book, Command, GitPullRequest, Brain, Trophy, Target, Lock, List, Grid, AlertCircle
 } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
 import { themes } from '../data/themes';
@@ -768,7 +768,7 @@ const LearningView = ({ theme, progress, onComplete }) => {
     return (
       <div className="flex flex-col items-center justify-center h-64 p-6">
         <div className="text-red-500 mb-4">
-          <ExclamationCircle size={48} />
+          <AlertCircle size={48} />
         </div>
         <p className="text-lg mb-2" style={{ color: theme.error.main }}>
           {error}
