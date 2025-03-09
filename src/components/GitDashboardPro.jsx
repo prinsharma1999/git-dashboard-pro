@@ -1654,7 +1654,7 @@ exit                   - Close terminal`
             backgroundColor: theme.primary.main,
             color: theme.primary.contrast
           }}
-          onClick={() => setShowCommandGenerator(true)}
+          onClick={() => setView('ai')}
         >
           <Brain size={16} />
           <span>Generate Command</span>
